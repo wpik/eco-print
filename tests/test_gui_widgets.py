@@ -85,6 +85,71 @@ class TestSettingsPanelIsGenerated:
         panel.reset()
         assert panel.options() == Options()
 
+    def test_one_click_after_expanding_is_enough_to_toggle_a_control(
+        self, qt_app
+    ):
+        """Regression check for the reported "need to click twice" bug.
+
+        Honest limitation: this could not be made to reproduce the reported
+        symptom on the offscreen test backend at all -- not even the pre-fix
+        code (~15 widgets shown individually via findChildren, no forced
+        layout pass) failed this test once the click targeted the checkbox's
+        real content rather than QTest's default widget-centre position
+        (which lands in blank stretched space for a wide row and proves
+        nothing either way). The offscreen QPA platform evidently settles
+        layouts synchronously in a way the real platform backend may not.
+        This test therefore pins the intended behaviour -- one click after
+        expanding is enough -- without claiming to prove the underlying
+        platform race is fixed; that needs confirming on a real display.
+        """
+        panel = SettingsPanel(Options(), lambda options: None)
+        panel.resize(1000, 10)   # wide enough that a centre-click would miss
+        panel.show()
+        qt_app.processEvents()
+
+        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtTest import QTest
+
+        panel.setChecked(True)
+        widget = panel._widgets["reorder"]
+        assert widget.isVisible() and widget.isEnabled()
+
+        # Click within the checkbox's real content (its sizeHint), not the
+        # centre of the row it has been stretched to fill.
+        QTest.mouseClick(widget, Qt.LeftButton, Qt.NoModifier, QPoint(10, 10))
+        assert panel.options().reorder is True
+
+    def test_expanding_toggles_a_single_container_not_each_control(self, qt_app):
+        """The bug's likely mechanism: ~15 individual setVisible() calls left
+        a window where the panel had grown but a freshly shown control's
+        click-hit-region had not caught up. Toggling one container instead of
+        each control individually removes that surface area; this test pins
+        that structural choice so a future change cannot silently reintroduce
+        the fragile pattern."""
+        panel = SettingsPanel(Options(), lambda options: None)
+        assert hasattr(panel, "_body")
+        for widget in panel._widgets.values():
+            assert panel._body.isAncestorOf(widget)
+
+    def test_expanding_forces_a_synchronous_layout_pass(self, qt_app):
+        """Geometry must be final by the time _set_body_visible returns --
+        not deferred to the next event-loop iteration, which is exactly the
+        kind of gap real click timing could fall into on some platforms even
+        though it did not reproduce on the offscreen test backend."""
+        panel = SettingsPanel(Options(), lambda options: None)
+        panel.resize(400, 10)
+        panel.show()
+        qt_app.processEvents()
+
+        panel.setChecked(True)
+        size_immediately = panel._widgets["reorder"].size()
+        qt_app.processEvents()
+        size_after_extra_pump = panel._widgets["reorder"].size()
+
+        assert size_immediately == size_after_extra_pump
+        assert size_immediately.height() > 0
+        assert size_immediately.width() > 0
+
     def test_the_panel_starts_collapsed_on_defaults(self, qt_app):
         """Dropping files and pressing save must need no reading (UC-03)."""
         assert SettingsPanel(Options(), lambda options: None).isChecked() is False

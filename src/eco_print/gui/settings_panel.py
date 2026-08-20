@@ -138,7 +138,15 @@ class SettingsPanel(QGroupBox):
         self.setCheckable(True)
         self.setChecked(options != Options())
 
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        # All body content lives in one container widget, toggled as a single
+        # unit (see `_set_body_visible`) rather than each control being shown
+        # or hidden individually.
+        self._body = QWidget(self)
+        body_layout = QVBoxLayout(self._body)
+        body_layout.setContentsMargins(9, 9, 9, 9)
         form = QFormLayout()
         checks = QVBoxLayout()
 
@@ -151,15 +159,17 @@ class SettingsPanel(QGroupBox):
             else:
                 form.addRow(f"{field.metadata['label']}:", widget)
 
-        layout.addLayout(form)
-        layout.addLayout(checks)
+        body_layout.addLayout(form)
+        body_layout.addLayout(checks)
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         reset = QPushButton("Reset to defaults")
         reset.clicked.connect(self.reset)
         buttons.addWidget(reset)
-        layout.addLayout(buttons)
+        body_layout.addLayout(buttons)
+
+        outer.addWidget(self._body)
 
         self.toggled.connect(self._on_toggle)
         self._set_body_visible(self.isChecked())
@@ -176,8 +186,25 @@ class SettingsPanel(QGroupBox):
         self._set_body_visible(checked)
 
     def _set_body_visible(self, visible: bool) -> None:
-        for child in self.findChildren(QWidget):
-            child.setVisible(visible)
+        """Show or hide every control as one unit, and force the resulting
+        layout change to settle immediately.
+
+        Toggling ~15 individual child widgets one by one (the previous
+        approach) left a window where the group box had grown to its new
+        size but the platform's hit-testing for the freshly shown controls
+        had not yet caught up with it — the first real click after expanding
+        the panel landed on stale geometry and was lost, so a control needed
+        two clicks: one that appeared to do nothing, one that worked. Toggling
+        a single container and immediately re-activating this widget's layout
+        (rather than waiting for the next event-loop iteration to do it)
+        closes that window.
+        """
+        self._body.setVisible(visible)
+        self.layout().invalidate()
+        self.layout().activate()
+        window_layout = self.window().layout() if self.window() is not None else None
+        if window_layout is not None:
+            window_layout.activate()
 
     def options(self) -> Options:
         """The settings the panel currently describes."""

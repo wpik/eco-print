@@ -98,7 +98,7 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **all milestones, including M7-M9, are implemented** on
+Status: **all milestones, including M7-M10, are implemented** on
 `feature/initial-version`. on `feature/initial-version`; M3 onwards
 are not started.
 
@@ -209,6 +209,25 @@ every setting at its default shows the panel collapsed; a window opened with
 any single setting away from its default shows it expanded with its widgets
 actually visible, not merely `isChecked()` true; and `Exit` renders on a row
 below `Save PDF` rather than beside it.
+
+**M10 — settings panel: consolidate the toggled body, force synchronous
+layout.** *(done, effectiveness unconfirmed on a real display)* Reported: a
+control inside the Settings panel needs two clicks after expanding it -- the
+first appears to do nothing. `_set_body_visible` previously toggled roughly
+fifteen individual widgets one at a time via `findChildren`, leaving geometry
+settling to the next event-loop iteration; that is a plausible mechanism for
+a widget's on-screen position to lag one frame behind its hit-testable
+region on a real compositor, even though it never reproduced on the
+offscreen Qt test backend used in this repository. Fixed by consolidating
+all body content into one `QWidget` container toggled as a single unit, and
+forcing `layout().activate()` synchronously on both the panel and its window
+immediately after the toggle rather than waiting for Qt's own deferred pass.
+Honest limitation: the bug could not be reproduced in the offscreen test
+harness at all -- not even the pre-fix code failed once a test clicked a
+checkbox's real rendered content rather than the centre of the row it had
+been stretched to fill by its layout, which was itself a flaw in the first
+attempt at a regression test. The fix is applied as the correct, more robust
+pattern regardless, but needs confirming against a real display.
 
 ## 6. Testing strategy
 
