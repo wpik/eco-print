@@ -119,10 +119,14 @@ def value_of(field, widget):
 
 
 class SettingsPanel(QGroupBox):
-    """Every option, in a block that starts collapsed (UC-03).
+    """Every option, in a block that starts collapsed unless it has something
+    to show (UC-03).
 
     The tool must be usable by dropping files and pressing save without reading
-    anything, so the options are present but out of the way.
+    anything, so a user on the defaults never sees the options unasked. But a
+    user who arrives with a non-default setting -- typically one remembered
+    from a previous session -- has already told the tool it matters to them,
+    so the panel opens by itself rather than hiding an active setting.
     """
 
     def __init__(self, options: Options, on_change: Callable[[Options], None]):
@@ -132,7 +136,7 @@ class SettingsPanel(QGroupBox):
         self._suspended = False
 
         self.setCheckable(True)
-        self.setChecked(False)
+        self.setChecked(options != Options())
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
@@ -158,7 +162,7 @@ class SettingsPanel(QGroupBox):
         layout.addLayout(buttons)
 
         self.toggled.connect(self._on_toggle)
-        self._set_body_visible(False)
+        self._set_body_visible(self.isChecked())
 
     def _connect(self, field, widget) -> None:
         signal = {

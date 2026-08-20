@@ -140,10 +140,13 @@ class MainWindow(QMainWindow):
         copy = QPushButton("Copy as command line")
         copy.clicked.connect(self._copy_command_line)
         bottom.addWidget(copy)
-        exit_button = QPushButton("Exit")
-        exit_button.clicked.connect(self.close)
-        bottom.addWidget(exit_button)
         bottom.addWidget(self.save)
+
+        exit_row = QHBoxLayout()
+        exit_row.addStretch(1)
+        self.exit_button = QPushButton("Exit")
+        self.exit_button.clicked.connect(self.close)
+        exit_row.addWidget(self.exit_button)
 
         root = QWidget()
         layout = QVBoxLayout(root)
@@ -151,6 +154,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.settings)
         layout.addLayout(output_row)
         layout.addLayout(bottom)
+        layout.addLayout(exit_row)
         return root
 
     def _install_shortcuts(self) -> None:

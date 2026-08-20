@@ -85,9 +85,28 @@ class TestSettingsPanelIsGenerated:
         panel.reset()
         assert panel.options() == Options()
 
-    def test_the_panel_starts_collapsed(self, qt_app):
+    def test_the_panel_starts_collapsed_on_defaults(self, qt_app):
         """Dropping files and pressing save must need no reading (UC-03)."""
         assert SettingsPanel(Options(), lambda options: None).isChecked() is False
+
+    def test_the_panel_starts_expanded_on_a_non_default_setting(self, qt_app):
+        """A non-default setting -- typically one remembered from a previous
+        session -- has already told the tool it matters; hiding it behind a
+        click would be a worse default than showing it."""
+        panel = SettingsPanel(Options(reorder=True), lambda options: None)
+        assert panel.isChecked() is True
+
+    def test_an_expanded_panel_actually_shows_its_widgets(self, qt_app):
+        """Regression: checked state alone is not enough -- the body widgets
+        must actually be told to show themselves too."""
+        panel = SettingsPanel(Options(gap=99.0), lambda options: None)
+        panel.show()
+        qt_app.processEvents()
+        assert panel._widgets["gap"].isVisible()
+
+    def test_a_single_non_default_field_is_enough_to_expand(self, qt_app):
+        panel = SettingsPanel(Options(separator=True), lambda options: None)
+        assert panel.isChecked() is True
 
     def test_a_tooltip_names_the_equivalent_flag(self, qt_app):
         panel = SettingsPanel(Options(), lambda options: None)
@@ -103,6 +122,40 @@ class TestWindow:
     def test_saving_is_disabled_until_there_is_something_to_save(self, window):
         assert window().save.isEnabled() is False
         assert window(["statement-a"]).save.isEnabled() is True
+
+    def test_a_remembered_non_default_setting_expands_the_panel_on_open(
+        self, qt_app, tmp_path: Path
+    ):
+        """The real path: settings saved by a previous session, read back by
+        the next one -- not just SettingsPanel built directly with a value."""
+        from PySide6.QtCore import QSettings
+
+        from eco_print.gui.settings_panel import remember
+        from eco_print.settings import Options
+
+        store = QSettings(str(tmp_path / "remembered.ini"), QSettings.IniFormat)
+        remember(Options(margin=50.0), store=store)
+
+        w = MainWindow([], store=store)
+        assert w.settings.isChecked() is True
+
+    def test_all_default_remembered_settings_leave_the_panel_collapsed(
+        self, qt_app, tmp_path: Path
+    ):
+        from PySide6.QtCore import QSettings
+
+        store = QSettings(str(tmp_path / "remembered.ini"), QSettings.IniFormat)
+        w = MainWindow([], store=store)
+        assert w.settings.isChecked() is False
+
+    def test_exit_sits_on_its_own_row_below_save(self, window, qt_app):
+        """Exit and Save PDF must not share a row (per explicit request)."""
+        w = window(["statement-a"])
+        w.show()
+        qt_app.processEvents()
+        save_top = w.save.mapTo(w, w.save.rect().topLeft()).y()
+        exit_top = w.exit_button.mapTo(w, w.exit_button.rect().topLeft()).y()
+        assert exit_top > save_top
 
     def test_a_row_shows_its_height(self, window):
         assert "163 pt" in window(["statement-a"]).list.item(0).text()

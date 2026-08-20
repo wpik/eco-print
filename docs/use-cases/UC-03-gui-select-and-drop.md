@@ -34,12 +34,19 @@ means CLI mode ([UC-01](UC-01-cli-merge-explicit-files.md)); the two never mix.
     |   [ ] show detection details          [ Reset to defaults ]             |
     +--------------------------------------------------------------------------+
     |  Output: [ ~/Documents/combined.pdf        ] [Browse]                    |
-    |  Result: 5 blocks -> 2 pages (saves 3 sheets)  [Copy cmd][Exit][Save PDF] |
+    |  Result: 5 blocks -> 2 pages (saves 3 sheets)     [Copy cmd] [Save PDF]   |
+    |                                                              [   Exit  ]  |
     +--------------------------------------------------------------------------+
 
 The settings block is collapsed by default — the tool must be usable by dropping
 files and pressing save, without reading anything. It holds the full set of
 options, which is exactly the set the CLI offers ([UC-08](UC-08-settings-parity.md)).
+
+The one exception: if any remembered setting is not at its default when the
+window opens — typically because a previous session changed and kept it — the
+panel opens expanded instead. A non-default setting has already told the tool
+it matters to this user, and hiding it behind a click would surprise them more
+than showing it does.
 
 The **Details** pane is the GUI's rendering of `--verbose`
 ([UC-08](UC-08-settings-parity.md)): what each page's detection decided and why,
@@ -109,9 +116,10 @@ out:
 - Making a further change after a save re-arms the prompt: the state on disk no
   longer matches what is on screen.
 
-An **Exit** button sits beside `Save PDF` and closes the window the same way the
-window's own close control does, so it is subject to the same confirmation — an
-Exit button that skipped the check would be a second, inconsistent way to quit.
+An **Exit** button sits directly below `Save PDF`, on its own row, and closes
+the window the same way the window's own close control does, so it is subject
+to the same confirmation — an Exit button that skipped the check would be a
+second, inconsistent way to quit.
 
 ## Acceptance criteria
 
@@ -131,3 +139,7 @@ Exit button that skipped the check would be a second, inconsistent way to quit.
   and the dialog closes; choosing **Open Folder** opens its containing
   directory and the dialog closes; choosing **Close** opens nothing and the
   dialog simply closes.
+- Opening the window with every setting at its default leaves the Settings
+  panel collapsed; opening it with any one setting remembered away from its
+  default leaves the panel expanded.
+- `Exit` renders on its own row, below `Save PDF`.

@@ -98,7 +98,7 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **all milestones, including M7 and M8, are implemented** on
+Status: **all milestones, including M7-M9, are implemented** on
 `feature/initial-version`. on `feature/initial-version`; M3 onwards
 are not started.
 
@@ -194,6 +194,21 @@ actually launch Finder or a PDF viewer. *Done when:* each of the three
 choices produces the documented effect and nothing more, and dismissing the
 dialog by its own close control behaves like Close rather than crashing or
 falling through to an unintended action.
+
+**M9 — settings visibility and Exit placement.** *(done)* Two adjustments from
+direct use of the window: `SettingsPanel` now starts expanded, not merely
+collapsed, when constructed with an `Options` that differs from the defaults
+in any field -- which in practice means a remembered setting from a previous
+session. This surfaced a latent bug in the panel's own construction: its body
+widgets were unconditionally hidden at the end of `__init__` regardless of the
+checked state just set, which only ever looked correct because the panel had
+never before started anything but collapsed. `Exit` moved off the row it
+shared with `Save PDF` onto its own row directly beneath it, per explicit
+request rather than a design judgement call. *Done when:* a window opened with
+every setting at its default shows the panel collapsed; a window opened with
+any single setting away from its default shows it expanded with its widgets
+actually visible, not merely `isChecked()` true; and `Exit` renders on a row
+below `Save PDF` rather than beside it.
 
 ## 6. Testing strategy
 
