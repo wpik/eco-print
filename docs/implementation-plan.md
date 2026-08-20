@@ -92,7 +92,7 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **M1-M4a are implemented** on `feature/initial-version`; M3 onwards
+Status: **M1-M4b are implemented** on `feature/initial-version`; M3 onwards
 are not started.
 
 **M1 — Skeleton, environment and options.** *(done)* `pyproject.toml`, `.venv`, package
@@ -119,7 +119,7 @@ translation). (UC-06)
 *Done when:* the five `statement-*` fixtures produce a 2-page PDF, blocks 3 + 2,
 at 1:1 scale.
 
-**M4b — Reordered packer (`--reorder`).** Lower bound, First-Fit-Decreasing,
+**M4b — Reordered packer (`--reorder`).** *(done)* Lower bound, First-Fit-Decreasing,
 branch-and-bound under a time budget, tallest-first emission within a sheet, and
 the "saved N sheets" reporting. Shares everything downstream with M4a — it
 returns the same `PackResult`, so composition needs no changes. (UC-06)
