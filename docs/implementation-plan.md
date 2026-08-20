@@ -98,8 +98,8 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **M1-M6 are implemented** on `feature/initial-version`. M7 (polish
-fixes from first real use) is planned below. on `feature/initial-version`; M3 onwards
+Status: **all milestones, including M7, are implemented** on
+`feature/initial-version`. on `feature/initial-version`; M3 onwards
 are not started.
 
 **M1 — Skeleton, environment and options.** *(done)* `pyproject.toml`, `.venv`, package
@@ -153,7 +153,7 @@ option present in the panel.
 A useful CLI exists from M5 — before any Qt code is written. If the GUI proves
 fiddly, the paper-saving is already in hand.
 
-**M7 — GUI polish from first real use.**
+**M7 — GUI polish from first real use.** *(done)*
 
 - The separator becomes a **dashed cut line** spanning margin to margin, not a
   filled decorative bar, and its label changes to "add horizontal line between

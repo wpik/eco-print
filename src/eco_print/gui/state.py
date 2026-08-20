@@ -93,11 +93,33 @@ class Estimate:
 
 @dataclass
 class Session:
-    """The document list and the settings applied to it."""
+    """The document list and the settings applied to it.
+
+    `revision` and `saved_revision` back the GUI's close confirmation
+    (UC-03): the window should ask before discarding work only when the
+    session has actually changed since the last successful save, not merely
+    because documents are loaded. Every method that changes what `Save PDF`
+    would produce bumps `revision`; `mark_saved` records where it stood at
+    the last write.
+    """
 
     options: Options = field(default_factory=Options)
     entries: list[Entry] = field(default_factory=list)
     errors: list[SourceError] = field(default_factory=list)
+    revision: int = 0
+    saved_revision: int = 0
+
+    @property
+    def dirty(self) -> bool:
+        """Whether closing now would discard work not yet written out."""
+        return bool(self.entries) and self.revision != self.saved_revision
+
+    def mark_saved(self) -> None:
+        """Record that the current state has just been written to disk."""
+        self.saved_revision = self.revision
+
+    def _bump(self) -> None:
+        self.revision += 1
 
     # -- building the list --------------------------------------------------
 
@@ -121,19 +143,26 @@ class Session:
             entry = Entry(page=page, detection=detection)
             self.entries.append(entry)
             added.append(entry)
+        if added:
+            self._bump()
         return added
 
     def remove(self, index: int) -> None:
         del self.entries[index]
+        self._bump()
 
     def move(self, index: int, destination: int) -> None:
         """Reorder by dragging. Output order follows list order (UC-03)."""
         entry = self.entries.pop(index)
         self.entries.insert(max(0, min(destination, len(self.entries))), entry)
+        self._bump()
 
     def clear(self) -> None:
+        had_something = bool(self.entries or self.errors)
         self.entries.clear()
         self.errors.clear()
+        if had_something:
+            self._bump()
 
     # -- crops (UC-04) ------------------------------------------------------
 
@@ -152,14 +181,20 @@ class Session:
             bottom = max(0.0, top - MIN_CROP_PT)
         box = ContentBox(0.0, bottom, page.width, top, origin="manual")
         entry.manual_box = box
+        self._bump()
         return box
 
     def reset_to_auto(self, index: int) -> None:
-        self.entries[index].manual_box = None
+        entry = self.entries[index]
+        if entry.is_manual:
+            entry.manual_box = None
+            self._bump()
 
     def reset_all_to_auto(self) -> None:
-        for entry in self.entries:
-            entry.manual_box = None
+        if any(entry.is_manual for entry in self.entries):
+            for entry in self.entries:
+                entry.manual_box = None
+            self._bump()
 
     def apply_box_to_all(self, index: int) -> int:
         """Copy one entry's crop to every page of the same size (UC-04).
@@ -203,11 +238,14 @@ class Session:
 
     def apply_options(self, options: Options) -> None:
         """Adopt new settings, re-detecting only if detection depends on them."""
+        if options == self.options:
+            return
         needs_redetect = (
             options.pad != self.options.pad
             or options.full_ink != self.options.full_ink
         )
         self.options = options
+        self._bump()
         if needs_redetect:
             self.redetect()
 

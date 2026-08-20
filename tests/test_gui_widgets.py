@@ -20,7 +20,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("PySide6", reason="the GUI extra is not installed")
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
 from eco_print.gui.app import MainWindow  # noqa: E402
 from eco_print.gui.settings_panel import SettingsPanel  # noqa: E402
@@ -166,6 +166,102 @@ class TestWindow:
         assert "eco-print" in QGuiApplication.clipboard().text()
 
 
+class TestCloseConfirmationAndExit:
+    """UC-03: prompt only for real, unsaved loss; Exit goes through the same
+    path as the window's own close control (#4, #5)."""
+
+    def test_closing_an_empty_window_needs_no_confirmation(self, window):
+        w = window()
+        event = _FakeCloseEvent()
+        w.closeEvent(event)
+        assert event.accepted
+
+    def test_closing_with_unsaved_documents_asks(self, window, monkeypatch):
+        asked = []
+        monkeypatch.setattr(
+            QMessageBox, "question",
+            lambda *a, **k: asked.append(True) or QMessageBox.No,
+        )
+        w = window(STATEMENTS)
+        event = _FakeCloseEvent()
+        w.closeEvent(event)
+        assert asked
+        assert not event.accepted   # "No" was chosen
+
+    def test_closing_right_after_a_save_needs_no_confirmation(
+        self, window, tmp_path: Path, monkeypatch
+    ):
+        monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+        w = window(STATEMENTS)
+        w.output.setText(str(tmp_path / "out.pdf"))
+        w._save()
+
+        event = _FakeCloseEvent()
+        w.closeEvent(event)
+        assert event.accepted
+
+    def test_a_change_after_saving_re_arms_the_prompt(
+        self, window, tmp_path: Path, monkeypatch
+    ):
+        monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+        asked = []
+        monkeypatch.setattr(
+            QMessageBox, "question",
+            lambda *a, **k: asked.append(True) or QMessageBox.No,
+        )
+        w = window(STATEMENTS)
+        w.output.setText(str(tmp_path / "out.pdf"))
+        w._save()
+        w.list.setCurrentRow(0)
+        w._remove_selected()
+
+        event = _FakeCloseEvent()
+        w.closeEvent(event)
+        assert asked
+
+    def test_choosing_yes_lets_the_window_close(self, window, monkeypatch):
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+        w = window(STATEMENTS)
+        event = _FakeCloseEvent()
+        w.closeEvent(event)
+        assert event.accepted
+
+    def test_exit_routes_through_the_same_close_path(self, window, monkeypatch):
+        """An Exit button that skipped closeEvent would be a second,
+        inconsistent way to quit."""
+        calls = []
+        monkeypatch.setattr(
+            QMessageBox, "question",
+            lambda *a, **k: calls.append(True) or QMessageBox.No,
+        )
+        w = window(STATEMENTS)
+        exit_button = _find_button(w, "Exit")
+        assert exit_button is not None
+        exit_button.click()
+        assert calls   # the same confirmation fired
+
+
+class _FakeCloseEvent:
+    def __init__(self):
+        self.accepted = False
+        self.ignored = False
+
+    def accept(self):
+        self.accepted = True
+
+    def ignore(self):
+        self.ignored = True
+
+
+def _find_button(widget, text):
+    from PySide6.QtWidgets import QPushButton
+
+    for button in widget.findChildren(QPushButton):
+        if button.text() == text:
+            return button
+    return None
+
+
 class TestDetailsPane:
     """UC-03, UC-08: "show detection details" must have a visible effect —
     the gap that shipped it inert in M6."""
@@ -202,6 +298,18 @@ class TestDetailsPane:
         w._remove_selected()
         assert "statement-a.pdf" not in w.details.toPlainText()
         assert "nothing to report" in w.details.toPlainText()
+
+    def test_the_pane_gets_real_width_not_just_visibility(self, window, qt_app):
+        """Regression: `setVisible(True)` alone left the splitter section at
+        the 0px it was given at construction, so the pane was "visible" and
+        yet showed nothing on screen."""
+        w = window(["statement-a"])
+        w.resize(1200, 700)
+        w.show()
+        qt_app.processEvents()
+        w.settings._widgets["verbose"].setChecked(True)
+        qt_app.processEvents()
+        assert w.splitter.sizes()[-1] > 50
 
 
 class TestCropView:

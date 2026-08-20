@@ -27,6 +27,85 @@ def session(data_dir: Path):
     return build
 
 
+class TestDirtyTracking:
+    """UC-03: the close prompt fires only for real, unsaved changes.
+
+    "Modified" here means anything that would change what Save PDF writes —
+    the list, a crop, or a setting — not merely that documents are loaded.
+    """
+
+    def test_an_empty_session_is_not_dirty(self, session):
+        assert session().dirty is False
+
+    def test_adding_documents_makes_it_dirty(self, session):
+        assert session(STATEMENTS).dirty is True
+
+    def test_marking_saved_clears_it(self, session):
+        s = session(STATEMENTS)
+        s.mark_saved()
+        assert s.dirty is False
+
+    def test_a_further_change_after_saving_re_marks_it_dirty(self, session):
+        """The state on disk no longer matches what's on screen."""
+        s = session(STATEMENTS)
+        s.mark_saved()
+        s.remove(0)
+        assert s.dirty is True
+
+    def test_removing_every_document_after_saving_is_still_not_dirty(self, session):
+        s = session(STATEMENTS)
+        s.mark_saved()
+        for _ in range(5):
+            s.remove(0)
+        assert s.dirty is False  # nothing left to lose
+
+    def test_reordering_counts_as_a_modification(self, session):
+        s = session(STATEMENTS)
+        s.mark_saved()
+        s.move(0, 4)
+        assert s.dirty is True
+
+    def test_editing_a_crop_counts_as_a_modification(self, session):
+        """Confirmed: crops count, not just list membership."""
+        s = session(STATEMENTS)
+        s.mark_saved()
+        s.set_manual_box(0, 800.0, 400.0)
+        assert s.dirty is True
+
+    def test_resetting_an_unmodified_crop_is_not_a_modification(self, session):
+        """Nothing actually changed, so nothing should be marked dirty."""
+        s = session(STATEMENTS)
+        s.mark_saved()
+        s.reset_to_auto(0)          # already auto; a no-op
+        assert s.dirty is False
+
+    def test_changing_a_setting_counts_as_a_modification(self, session):
+        """Confirmed: settings count too, not just list membership."""
+        s = session(STATEMENTS)
+        s.mark_saved()
+        s.apply_options(replace(s.options, gap=99.0))
+        assert s.dirty is True
+
+    def test_reapplying_the_same_settings_is_not_a_modification(self, session):
+        s = session(STATEMENTS)
+        s.mark_saved()
+        s.apply_options(replace(s.options))
+        assert s.dirty is False
+
+    def test_clearing_an_empty_session_is_not_a_modification(self, session):
+        s = session()
+        s.mark_saved()
+        s.clear()
+        assert s.dirty is False
+
+    def test_saving_again_after_a_second_change_clears_it_again(self, session):
+        s = session(STATEMENTS)
+        s.mark_saved()
+        s.remove(0)
+        s.mark_saved()
+        assert s.dirty is False
+
+
 class TestBuildingTheList:
     def test_dropping_files_adds_a_row_each(self, session):
         assert len(session(STATEMENTS).entries) == 5

@@ -120,6 +120,7 @@ class MainWindow(QMainWindow):
         details_layout.addWidget(QLabel("Details"))
         details_layout.addWidget(self.details, 1)
         self.details_pane.hide()
+        self._details_pane_shown = False
 
         self.splitter = QSplitter()
         self.splitter.addWidget(left)
@@ -139,6 +140,9 @@ class MainWindow(QMainWindow):
         copy = QPushButton("Copy as command line")
         copy.clicked.connect(self._copy_command_line)
         bottom.addWidget(copy)
+        exit_button = QPushButton("Exit")
+        exit_button.clicked.connect(self.close)
+        bottom.addWidget(exit_button)
         bottom.addWidget(self.save)
 
         root = QWidget()
@@ -314,6 +318,7 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             QMessageBox.warning(self, WINDOW_TITLE, f"Could not write {target}:\n{exc}")
             return
+        self.session.mark_saved()
         QMessageBox.information(
             self,
             WINDOW_TITLE,
@@ -334,20 +339,33 @@ class MainWindow(QMainWindow):
 
         Visibility follows `Options.verbose` directly, so the checkbox has a
         visible effect the moment it is ticked — the gap that made it inert
-        in the first place.
+        in the first place. A splitter section that is merely `setVisible`
+        keeps whatever width it last had, which is 0 the first time this pane
+        appears, so an explicit size is given when it goes from hidden to
+        shown.
         """
         visible = self.session.options.verbose
+        was_visible = self._details_pane_shown
         self.details_pane.setVisible(visible)
+        self._details_pane_shown = visible
         if visible:
             self.details.setPlainText(self.session.details())
+            if not was_visible:
+                sizes = self.splitter.sizes()
+                sizes[-1] = max(sizes[-1], 280)
+                self.splitter.setSizes(sizes)
 
     def _warn(self, errors) -> None:
         detail = "\n".join(f"{e.path.name}: {e.reason}" for e in errors[:8])
         QMessageBox.warning(self, WINDOW_TITLE, f"Could not use:\n{detail}")
 
     def closeEvent(self, event) -> None:  # noqa: N802
-        """Closing with documents loaded asks first (UC-03)."""
-        if not self.session.entries:
+        """Ask before closing only when something would actually be lost.
+
+        An empty window, or one whose current state was just written to disk,
+        closes immediately. Any further change re-arms the prompt (UC-03).
+        """
+        if not self.session.dirty:
             event.accept()
             return
         answer = QMessageBox.question(
