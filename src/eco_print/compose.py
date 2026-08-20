@@ -18,11 +18,11 @@ from .settings import Options
 
 log = logging.getLogger(__name__)
 
-#: Thickness of the optional separator rule, in points.
-SEPARATOR_THICKNESS = 0.4
+#: Thickness of the optional cut line, in points.
+SEPARATOR_THICKNESS = 0.5
 
-#: How far a separator stops short of the sheet edge, as a share of its width.
-SEPARATOR_INSET = 0.25
+#: Dash pattern for the cut line: 4pt on, 3pt off, in PDF content-stream units.
+SEPARATOR_DASH = "[4 3] 0 d"
 
 
 def write(result: PackResult, output: Path, options: Options | None = None) -> Path:
@@ -102,22 +102,30 @@ def _horizontal_offset(block: Block, sheet_width: float, options: Options) -> fl
 
 
 def _draw_separators(target, placements: list[Placement], options: Options) -> None:
-    """Draw a hairline rule centred in each gap between blocks."""
+    """Draw a dashed cut line centred in each gap between blocks.
+
+    The line runs from the left margin to the right margin, the same span a
+    person would use scissors across — it is meant as a literal cutting guide,
+    not a decorative divider, so it is not inset from the printable area.
+    """
     width = options.page_dimensions()[0]
-    inset = width * SEPARATOR_INSET / 2
+    left = options.margin
+    right = width - options.margin
     lines = []
 
     for above, below in zip(placements, placements[1:]):
         bottom_of_above = above.top - above.block.height
         middle = (bottom_of_above + below.top) / 2
-        lines.append(
-            f"{inset:.2f} {middle:.2f} {width - 2 * inset:.2f} "
-            f"{SEPARATOR_THICKNESS:.2f} re f"
-        )
+        lines.append(f"{left:.2f} {middle:.2f} m {right:.2f} {middle:.2f} l S")
 
     if not lines:
         return
-    drawing = "q 0.6 0.6 0.6 rg\n" + "\n".join(lines) + "\nQ\n"
+    drawing = (
+        "q 0.6 0.6 0.6 RG "
+        f"{SEPARATOR_THICKNESS:.2f} w {SEPARATOR_DASH}\n"
+        + "\n".join(lines)
+        + "\nQ\n"
+    )
     _append_content(target, drawing)
 
 

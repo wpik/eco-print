@@ -43,7 +43,7 @@ may be files or directories, mixed freely, and are processed in the order given:
 | `--pad PT` | Whitespace kept around the detected content. Default 6. |
 | `--page-size` | `a4` (default) or `letter`. |
 | `--full-ink` | Keep the whole ink area; never drop trailing footers. |
-| `--separator` | Draw a thin rule between blocks on a sheet. |
+| `--separator` | Draw a dashed cut line between blocks on a sheet, margin to margin. |
 | `--reorder` | Give up input order in exchange for the fewest possible sheets. |
 | `--recursive` | Descend into subdirectories of directory inputs. |
 | `--force` | Overwrite an existing output file. |

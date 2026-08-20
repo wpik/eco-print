@@ -141,6 +141,8 @@ class TestGeometry:
 
 
 class TestSeparators:
+    """The cut line is meant to be used literally with scissors (UC-06)."""
+
     def test_a_separator_adds_ink_between_blocks(self, written):
         plain, _ = written(["statement-a", "statement-b"], Options())
         ruled, _ = written(["statement-a", "statement-b"], Options(separator=True))
@@ -154,6 +156,49 @@ class TestSeparators:
         assert (render_sheets(plain)[0] < WHITE_THRESHOLD).sum() == (
             render_sheets(ruled)[0] < WHITE_THRESHOLD
         ).sum()
+
+    def test_the_line_spans_from_the_left_margin_to_the_right_margin(self, written):
+        options = Options(separator=True)
+        output, result = written(["statement-a", "statement-b"], options)
+        raster = render_sheets(output)[0]
+        row = _separator_row(raster, options, result)
+        ink_columns = (raster[row, :] < WHITE_THRESHOLD).nonzero()[0]
+
+        px_per_pt = raster.shape[1] / options.page_dimensions()[0]
+        assert ink_columns.min() == pytest.approx(options.margin * px_per_pt, abs=4)
+        assert ink_columns.max() == pytest.approx(
+            (options.page_dimensions()[0] - options.margin) * px_per_pt, abs=4
+        )
+
+    def test_the_line_is_actually_dashed(self, written):
+        """Not a solid rule: there must be gaps along its own row."""
+        options = Options(separator=True)
+        output, result = written(["statement-a", "statement-b"], options)
+        raster = render_sheets(output)[0]
+        row = _separator_row(raster, options, result)
+        ink = raster[row, :] < WHITE_THRESHOLD
+        # A solid line has one run of ink; a dashed one has several.
+        assert _count_runs(ink) > 3
+
+
+def _separator_row(raster, options: Options, result) -> int:
+    """The raster row the cut line is expected to sit on, from the same
+    geometry the composer used to place it."""
+    sheet = result.sheets[0]
+    placements = layout(sheet, options)
+    above, below = placements[0], placements[1]
+    bottom_of_above = above.top - above.block.height
+    middle_pt = (bottom_of_above + below.top) / 2
+    px_per_pt = raster.shape[0] / options.page_dimensions()[1]
+    return round((options.page_dimensions()[1] - middle_pt) * px_per_pt)
+
+
+def _count_runs(mask) -> int:
+    """How many contiguous True runs a 1-D boolean array contains."""
+    import numpy as np
+
+    padded = np.concatenate(([False], mask, [False]))
+    return int(np.sum(padded[1:] & ~padded[:-1]))
 
 
 class TestDeterminism:

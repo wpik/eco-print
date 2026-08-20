@@ -108,8 +108,8 @@ class Options:
     separator: bool = field(
         default=False,
         metadata=option(
-            "--separator", "draw a thin rule between blocks on a sheet", "check",
-            label="rule between documents",
+            "--separator", "draw a dashed cut line between blocks on a sheet", "check",
+            label="add horizontal line between documents",
         ),
     )
     reorder: bool = field(

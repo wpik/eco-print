@@ -62,7 +62,7 @@ something.
 | `--full-ink` | Disable footer dropping; keep the whole ink area ([UC-05](UC-05-automatic-content-detection.md)). |
 | `--pad PT` | Extra whitespace kept around the detected content. Default 6. |
 | `--reorder` | Give up input order in exchange for the fewest possible sheets. |
-| `--separator` | Draw a thin rule between blocks on a sheet. |
+| `--separator` | Draw a dashed cut line between blocks on a sheet, margin to margin. |
 | `--dry-run` | Report the detected boxes and the resulting sheet count; write nothing. |
 | `-v/--verbose` | Per-page detection detail. |
 
