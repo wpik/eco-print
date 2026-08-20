@@ -4,9 +4,7 @@ The option flags are not written out here: `settings.add_options` generates them
 from `Options`, which is what keeps the CLI and the GUI in step (UC-08). Only the
 arguments that concern the run rather than the output are declared locally.
 
-Milestones M1 and M2 are implemented: inputs resolve and load. Packing and
-composition arrive with M4, and until then `main` reports what it loaded and
-stops rather than pretending to write a document.
+The work itself lives in `pipeline.run`, which the GUI drives too.
 """
 from __future__ import annotations
 
@@ -16,8 +14,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .loader import load
-from .model import LoadResult
+from .pipeline import RunResult, run
 from .settings import Options, add_options
 
 EXIT_OK = 0
@@ -89,13 +86,26 @@ def check_output(output: Path, force: bool, dry_run: bool) -> None:
         parent.mkdir()
 
 
-def report_load(result: LoadResult, verbose: bool) -> None:
-    """Tell the user what was skipped, and — when asked — what was found."""
+def report(result: RunResult, options: Options) -> None:
+    """Tell the user what was skipped, and — when asked — what was decided."""
     for error in result.errors:
         print(f"skipped {error.path}: {error.reason}", file=sys.stderr)
-    if verbose:
-        for page in result.pages:
-            print(f"  {page.label}: {page.width:.0f} x {page.height:.0f} pt")
+
+    if options.verbose:
+        for detection in result.detections:
+            print(f"  {detection.describe()}")
+    elif result.blank_pages:
+        count = len(result.blank_pages)
+        page_word = "page" if count == 1 else "pages"
+        print(f"skipped {count} blank {page_word}", file=sys.stderr)
+
+    if result.packing:
+        for block in result.packing.oversized:
+            print(
+                f"warning: {block.page.label} is taller than one sheet "
+                f"({block.height:.0f}pt); it was placed alone and is clipped",
+                file=sys.stderr,
+            )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -125,22 +135,20 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    result = load(inputs, output=output, recursive=options.recursive)
-    report_load(result, options.verbose)
+    result = run(inputs, output, options, write_output=not args.dry_run)
+    report(result, options)
 
-    if not result.pages:
-        print("nothing to do: no readable pages were found", file=sys.stderr)
+    if not result.blocks:
+        # A zero-page document is worse than no document at all (UC-07).
+        print("nothing to do: no printable content was found", file=sys.stderr)
         return EXIT_FAILED
 
-    print(
-        f"loaded {len(result.pages)} pages from {result.document_count} documents",
-        file=sys.stderr,
-    )
-    print(
-        "eco-print: detection, packing and output are not built yet "
-        "(M3-M5); nothing was written.",
-        file=sys.stderr,
-    )
+    print(result.summary())
+    if args.dry_run:
+        print(f"dry run: {output} was not written")
+    else:
+        print(f"wrote {output}")
+
     return EXIT_OK if result.ok else EXIT_PARTIAL
 
 

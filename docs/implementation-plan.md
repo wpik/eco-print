@@ -38,7 +38,9 @@ if you would rather have the simpler dependency graph and don't care about AGPL.
         model.py                # Block, ContentBox, Sheet, PackResult
         loader.py               # inputs -> source pages (files, dirs, decryption)
         detect.py               # UC-05 content detection
-        packer.py               # UC-06 ordered + reordered packing
+        packer.py               # UC-06 ordered packing, layout, PackResult
+        repack.py               # UC-06 reordered packing (--reorder)
+        pipeline.py             # load -> detect -> pack -> compose, front-end agnostic
         compose.py              # writes the output PDF
         cli.py                  # UC-01, UC-02
         gui/
@@ -92,7 +94,7 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **M1-M4b are implemented** on `feature/initial-version`; M3 onwards
+Status: **M1-M5 are implemented**; the CLI is complete. M6 (GUI) is not started. on `feature/initial-version`; M3 onwards
 are not started.
 
 **M1 — Skeleton, environment and options.** *(done)* `pyproject.toml`, `.venv`, package
@@ -128,7 +130,7 @@ returns the same `PackResult`, so composition needs no changes. (UC-06)
 reordered count is never worse than the ordered one and never below the lower
 bound.
 
-**M5 — CLI.** Parser **generated from `Options`**, positional inputs and output,
+**M5 — CLI.** *(done)* Parser **generated from `Options`**, positional inputs and output,
 `--dry-run`, summary line, exit codes, refusing to overwrite (UC-01, UC-08).
 *Done when:* pointing the tool at the fixture directory prints
 `5 blocks from 5 documents -> 2 pages` and the acceptance criteria of UC-01 and

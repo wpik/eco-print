@@ -110,8 +110,112 @@ class TestOptionsReachTheRun:
         nested.mkdir()
         shutil.copy(data_dir / "landscape.pdf", nested / "landscape.pdf")
 
-        main([str(statement_dir), str(tmp_path / "out.pdf"), "-v"])
+        main([str(statement_dir), str(tmp_path / "shallow.pdf"), "-v"])
         assert "landscape.pdf" not in capsys.readouterr().out
 
-        main([str(statement_dir), str(tmp_path / "out.pdf"), "-v", "--recursive"])
+        main([str(statement_dir), str(tmp_path / "deep.pdf"), "-v", "--recursive"])
         assert "landscape.pdf" in capsys.readouterr().out
+
+
+class TestWritingAnOutput:
+    """M5: the command line does the whole job (UC-01)."""
+
+    def test_the_five_statements_become_a_two_page_pdf(
+        self, statement_dir: Path, tmp_path: Path, capsys
+    ):
+        from pypdf import PdfReader
+
+        output = tmp_path / "combined.pdf"
+        assert main([str(statement_dir), str(output)]) == EXIT_OK
+        assert len(PdfReader(str(output)).pages) == 2
+        assert "5 blocks from 5 documents -> 2 pages" in capsys.readouterr().out
+
+    def test_explicit_files_work_like_a_directory(
+        self, statement_dir: Path, tmp_path: Path
+    ):
+        from pypdf import PdfReader
+
+        files = sorted(str(p) for p in statement_dir.glob("*.pdf"))
+        output = tmp_path / "explicit.pdf"
+        assert main([*files, str(output)]) == EXIT_OK
+        assert len(PdfReader(str(output)).pages) == 2
+
+    def test_the_saving_is_reported(self, statement_dir: Path, tmp_path: Path, capsys):
+        main([str(statement_dir), str(tmp_path / "out.pdf")])
+        assert "saved 3 sheets" in capsys.readouterr().out
+
+    def test_a_dry_run_writes_nothing(self, statement_dir: Path, tmp_path: Path, capsys):
+        output = tmp_path / "out.pdf"
+        assert main([str(statement_dir), str(output), "--dry-run"]) == EXIT_OK
+        assert not output.exists()
+        assert "was not written" in capsys.readouterr().out
+
+    def test_reorder_reports_what_it_saved(self, data_dir: Path, tmp_path: Path, capsys):
+        """UC-06: the flag says whether it actually bought anything."""
+        packing = [str(data_dir / f"packing-{n}.pdf") for n in "abc"]
+        main([*packing, str(tmp_path / "out.pdf"), "--reorder"])
+        out = capsys.readouterr().out
+        assert "-> 2 pages" in out
+        assert "--reorder saved 1" in out
+
+    def test_without_reorder_the_same_files_need_three_pages(
+        self, data_dir: Path, tmp_path: Path, capsys
+    ):
+        packing = [str(data_dir / f"packing-{n}.pdf") for n in "abc"]
+        main([*packing, str(tmp_path / "out.pdf")])
+        assert "-> 3 pages" in capsys.readouterr().out
+
+    def test_settings_reach_the_output(self, statement_dir: Path, tmp_path: Path):
+        from pypdf import PdfReader
+
+        output = tmp_path / "letter.pdf"
+        main([str(statement_dir), str(output), "--page-size", "letter"])
+        page = PdfReader(str(output)).pages[0]
+        assert float(page.mediabox.width) == pytest.approx(612.0)
+
+    def test_a_blank_page_is_skipped_not_printed(self, data_dir: Path, tmp_path: Path, capsys):
+        from pypdf import PdfReader
+
+        output = tmp_path / "out.pdf"
+        code = main([
+            str(data_dir / "statement-a.pdf"), str(data_dir / "blank.pdf"), str(output)
+        ])
+        assert code == EXIT_OK
+        assert len(PdfReader(str(output)).pages) == 1
+        assert "blank" in capsys.readouterr().err
+
+    def test_an_oversized_block_is_warned_about(self, data_dir: Path, tmp_path: Path, capsys):
+        main([str(data_dir / "oversized.pdf"), str(tmp_path / "out.pdf")])
+        assert "taller than one sheet" in capsys.readouterr().err
+
+    def test_a_batch_survives_one_bad_file(
+        self, statement_dir: Path, tmp_path: Path, capsys
+    ):
+        """UC-07: the good files still produce their output, exit code says partial."""
+        from pypdf import PdfReader
+
+        (statement_dir / "impostor.pdf").write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 100)
+        output = tmp_path / "out.pdf"
+        assert main([str(statement_dir), str(output)]) == EXIT_PARTIAL
+        assert len(PdfReader(str(output)).pages) == 2
+        assert "impostor.pdf" in capsys.readouterr().err
+
+    def test_nothing_is_written_when_everything_fails(self, tmp_path: Path):
+        """A zero-page PDF is worse than no PDF (UC-07)."""
+        sources = tmp_path / "sources"
+        sources.mkdir()
+        (sources / "bad.pdf").write_bytes(b"not a pdf")
+        output = tmp_path / "out.pdf"
+        assert main([str(sources), str(output)]) == EXIT_FAILED
+        assert not output.exists()
+
+    def test_only_blank_pages_produce_no_document(self, data_dir: Path, tmp_path: Path):
+        output = tmp_path / "out.pdf"
+        assert main([str(data_dir / "blank.pdf"), str(output)]) == EXIT_FAILED
+        assert not output.exists()
+
+    def test_rerunning_is_reproducible(self, statement_dir: Path, tmp_path: Path):
+        first, second = tmp_path / "a.pdf", tmp_path / "b.pdf"
+        main([str(statement_dir), str(first)])
+        main([str(statement_dir), str(second)])
+        assert first.read_bytes() == second.read_bytes()
