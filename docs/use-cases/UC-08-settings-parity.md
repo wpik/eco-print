@@ -35,10 +35,10 @@ fails the suite rather than shipping.
 | Padding kept around detected content | `--pad PT` | Spin box, points |
 | Output sheet size | `--page-size` | Drop-down (A4, Letter, …) |
 | Keep all ink, drop nothing | `--full-ink` | Check box, "keep footers and page numbers" |
-| Separator rule between blocks | `--separator` | Check box, "rule between documents" |
+| Dashed cut line between blocks | `--separator` | Check box, "add horizontal line between documents" |
 | Give up order for fewest sheets | `--reorder` | Check box, "minimise pages (ignore order)" |
 | Recursive directory scan | `--recursive` | Check box on the folder-drop prompt, and in the panel |
-| Detail about what was detected and dropped | `-v/--verbose` | "Details" panel, expandable, showing the same per-page report |
+| Detail about what was detected and dropped | `-v/--verbose` | Check box, "show detection details", opening the Details pane ([UC-03](UC-03-gui-select-and-drop.md)) |
 
 ### Options whose GUI form is behaviour, not a control
 
@@ -62,6 +62,9 @@ immediately:
   keep their manual boxes and are left alone.
 - `--margin`, `--gap`, `--page-size` and `--reorder` change **packing** only, so
   the sheet count updates without re-rendering anything.
+- `--separator` and `--verbose` change how the *result* is presented — the cut
+  line on the sheet, and the Details pane in the window — without touching
+  detection or packing at all.
 - The status line reflects the new result at once, which turns the settings panel
   into a way of *seeing* how each option affects paper use rather than guessing.
 
@@ -75,10 +78,28 @@ immediately:
   It lets a user build a configuration by eye and then automate it, and it makes
   the parity in this document visible rather than merely claimed.
 
+## A control existing is not the same as it doing anything
+
+The parity test proves every option is *reachable*: it has a CLI flag and a GUI
+widget, and toggling the widget changes the `Options` object. That is necessary
+but not sufficient — a checkbox that toggles a field nobody reads is reachable
+and useless at once, which is exactly the shape `--verbose` took in the GUI
+before the Details pane existed to consume it.
+
+So parity is tested at two levels. Reachability, per the mapping above, plus a
+second table naming which stage each option is supposed to affect — detection,
+packing, composition, or the window's own view — with a test that changes the
+option and asserts that stage's *output* actually differs. An option that is
+declared and wired to a widget but consumed nowhere fails this second check even
+though it would pass the first.
+
 ## Acceptance criteria
 
 - Every field of `Options` is reachable from the CLI parser and from the GUI
   settings panel; the parity test enumerates the dataclass and fails on any gap.
+- Every field also has a documented stage it is supposed to affect, and a test
+  confirms that changing it changes that stage's output — reachability alone
+  does not pass.
 - The three behaviour-satisfied flags above are the only exceptions, and the test
   asserts that this exception list is exactly that long — a new flag cannot be
   quietly added to it.

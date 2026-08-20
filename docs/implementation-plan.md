@@ -98,7 +98,8 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **all milestones are implemented** on `feature/initial-version`. on `feature/initial-version`; M3 onwards
+Status: **M1-M6 are implemented** on `feature/initial-version`. M7 (polish
+fixes from first real use) is planned below. on `feature/initial-version`; M3 onwards
 are not started.
 
 **M1 — Skeleton, environment and options.** *(done)* `pyproject.toml`, `.venv`, package
@@ -151,6 +152,36 @@ option present in the panel.
 
 A useful CLI exists from M5 — before any Qt code is written. If the GUI proves
 fiddly, the paper-saving is already in hand.
+
+**M7 — GUI polish from first real use.**
+
+- The separator becomes a **dashed cut line** spanning margin to margin, not a
+  filled decorative bar, and its label changes to "add horizontal line between
+  documents" (UC-06, UC-08).
+- The **Details pane** is built and wired to `Session`: a third column, hidden
+  unless "show detection details" is ticked, showing the same per-page report
+  `-v` gives the CLI. This is what "show detection details" was supposed to do
+  from M6 — the checkbox existed and toggled `Options.verbose`, but nothing
+  consumed the value, so it had no visible effect (UC-03, UC-08).
+- **Close confirmation** becomes conditional: `Session` tracks a `revision`
+  counter bumped by every mutation (add, remove, move, crop, apply-options) and
+  a `saved_revision` set on a successful write. The window prompts only when
+  they differ and the list is non-empty, so an untouched or just-saved window
+  closes immediately, and any further edit re-arms the prompt (UC-03).
+- An **Exit** button is added beside `Save PDF`, calling the same close path as
+  the window's own close control so it is subject to the same confirmation
+  (UC-03).
+- **UC-08 strengthened**: parity was previously tested only as reachability
+  (every field has a flag and a widget). A second check now asserts each
+  field's *documented effect* actually happens — this is the gap that let
+  "show detection details" ship inert, and the new test is written to catch
+  exactly that shape of bug again.
+
+*Done when:* the separator prints as a dashed line at each margin; ticking
+"show detection details" populates the Details pane with real content; closing
+an unmodified or freshly-saved window is silent while closing a modified one
+prompts; `Exit` behaves identically to the window's close button; and the
+strengthened parity test passes for every option, `verbose` included.
 
 ## 6. Testing strategy
 

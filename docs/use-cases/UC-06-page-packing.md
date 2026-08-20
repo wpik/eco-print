@@ -69,8 +69,10 @@ half-full final sheet therefore sit spread out rather than crowded at the top,
 which reads as deliberate layout instead of a truncation. `--gap` sets the
 *minimum*; even distribution only ever adds to it.
 
-`--separator` draws a hairline rule centred in each gap, which helps when several
-unrelated documents share a sheet.
+`--separator` draws a **dashed cut line** centred in each gap, running the full
+printable width from the left margin to the right margin. It is meant to be used
+literally — a mark to align scissors against — not as decoration, so it is not
+inset from the sheet edges the way a divider would be.
 
 ## Oversized blocks
 

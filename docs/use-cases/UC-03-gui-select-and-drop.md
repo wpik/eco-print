@@ -11,34 +11,41 @@ means CLI mode ([UC-01](UC-01-cli-merge-explicit-files.md)); the two never mix.
 
 ## Window layout
 
-    +--------------------------------------------------------------+
-    |  eco-print                                                    |
-    +-------------------+------------------------------------------+
-    |  Documents        |   Preview                                |
-    |                   |                                          |
-    |  [1] statement-a  |   +----------------------------------+   |
-    |      p1  163pt    |   |                                  |   |
-    |  [2] statement-b  |   |   rendered page with the crop    |   |
-    |      p1  243pt    |   |   region highlighted and a       |   |
-    |  [3] statement-c  |   |   draggable bottom edge          |   |
-    |      p1  313pt    |   |                                  |   |
-    |                   |   +----------------------------------+   |
-    |  drop PDFs here   |   [x] auto   [ reset to auto ]           |
-    +-------------------+------------------------------------------+
-    |  Settings                                        [v] expand   |
-    |   margin [ 28] gap [ 20] pad [  6]  size [ A4  v]             |
-    |   [ ] keep footers and page numbers                           |
-    |   [ ] rule between documents                                  |
-    |   [ ] minimise pages (ignore order)                           |
-    |   [ ] scan folders recursively        [ Reset to defaults ]   |
-    +--------------------------------------------------------------+
-    |  Output: [ ~/Documents/combined.pdf        ] [Browse]         |
-    |  Result: 5 blocks -> 2 pages (saves 3 sheets)   [ Save PDF ]  |
-    +--------------------------------------------------------------+
+    +--------------------------------------------------------------------------+
+    |  eco-print                                                                |
+    +-------------------+------------------------------------+-----------------+
+    |  Documents        |   Preview                          |  Details        |
+    |                   |                                    |  (hidden unless |
+    |  [1] statement-a  |   +----------------------------+   |   "show detec-  |
+    |      p1  163pt    |   |                              |   |   tion details"|
+    |  [2] statement-b  |   |   rendered page with the    |   |   is ticked)    |
+    |      p1  243pt    |   |   crop region highlighted   |   |                 |
+    |  [3] statement-c  |   |   and a draggable bottom    |   |  statement-a p1 |
+    |      p1  313pt    |   |   edge                      |   |   163pt kept    |
+    |                   |   +----------------------------+   |   (ink-box)     |
+    |  drop PDFs here   |   [x] auto   [ reset to auto ]     |  statement-b p1 |
+    +-------------------+------------------------------------+   243pt kept    |
+    |  Settings                                        [v] expand              |
+    |   margin [ 28] gap [ 20] pad [  6]  size [ A4  v]                        |
+    |   [ ] keep footers and page numbers                                     |
+    |   [ ] add horizontal line between documents                             |
+    |   [ ] minimise pages (ignore order)                                     |
+    |   [ ] scan folders recursively                                          |
+    |   [ ] show detection details          [ Reset to defaults ]             |
+    +--------------------------------------------------------------------------+
+    |  Output: [ ~/Documents/combined.pdf        ] [Browse]                    |
+    |  Result: 5 blocks -> 2 pages (saves 3 sheets)  [Copy cmd][Exit][Save PDF] |
+    +--------------------------------------------------------------------------+
 
 The settings block is collapsed by default — the tool must be usable by dropping
 files and pressing save, without reading anything. It holds the full set of
 options, which is exactly the set the CLI offers ([UC-08](UC-08-settings-parity.md)).
+
+The **Details** pane is the GUI's rendering of `--verbose`
+([UC-08](UC-08-settings-parity.md)): what each page's detection decided and why,
+what was skipped and why, and the packing outcome sheet by sheet. It is hidden by
+default and appears only while "show detection details" is ticked, so it costs
+nothing to a user who never asks for it.
 
 ## Main flow
 
@@ -62,9 +69,15 @@ options, which is exactly the set the CLI offers ([UC-08](UC-08-settings-parity.
    once, so the effect of an option on paper use is visible before committing to
    it; ticking minimise-pages when it would save nothing says so rather than
    silently changing nothing. The full mapping is [UC-08](UC-08-settings-parity.md).
-8. The user sets the output path and presses `Save PDF`.
-9. On success a confirmation appears with the final sheet count and a button to
-   reveal the file in the file manager.
+8. Optionally the user ticks **show detection details**, which opens the
+   Details pane: a running account of what was kept, what was dropped and by
+   which method, any inputs that were skipped and why, and the sheet-by-sheet
+   packing outcome. It updates with every change to the list or the settings,
+   the same way the status line does.
+9. The user sets the output path and presses `Save PDF`.
+10. On success a confirmation appears with the final sheet count and a button to
+    reveal the file in the file manager. This is also the point at which the
+    window stops asking to confirm on close ([UC-03 close behaviour](#closing-the-window)).
 
 ## Rules
 
@@ -77,10 +90,37 @@ options, which is exactly the set the CLI offers ([UC-08](UC-08-settings-parity.
 - Adding a large number of files keeps the UI responsive: detection runs off the
   UI thread, and rows fill in progressively.
 
+## Closing the window
+
+Closing must not interrupt a user who has nothing to lose, but must not lose
+real work either. The window tracks whether the current state has been written
+out:
+
+- Adding, removing or reordering documents, editing a crop, or changing a
+  setting all mark the session **modified**.
+- A successful `Save PDF` marks it **saved**, against the exact state that was
+  written.
+- Closing prompts for confirmation only when the session is **both** modified
+  *and* has not been saved since — an empty window, and a window whose current
+  state was just written to disk, close immediately.
+- Making a further change after a save re-arms the prompt: the state on disk no
+  longer matches what is on screen.
+
+An **Exit** button sits beside `Save PDF` and closes the window the same way the
+window's own close control does, so it is subject to the same confirmation — an
+Exit button that skipped the check would be a second, inconsistent way to quit.
+
 ## Acceptance criteria
 
 - Dragging a folder of the five `statement-*` fixtures onto the window produces
   five rows and a status line reading `2 pages`.
 - `Save PDF` yields a file identical in layout to the CLI result for the same
   inputs and settings.
-- Closing the window with unsaved documents asks for confirmation.
+- Closing an empty window, or a window whose current state was just saved,
+  closes without a prompt.
+- Adding a document, editing a crop, or changing a setting after a save
+  re-arms the confirmation on close.
+- `Exit` and the window's own close button behave identically with respect to
+  the confirmation.
+- Ticking "show detection details" opens the Details pane with content; the
+  panel is not merely present but reports what was actually kept and dropped.
