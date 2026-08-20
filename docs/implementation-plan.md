@@ -92,7 +92,7 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **M1 and M2 are implemented** on `feature/initial-version`; M3 onwards
+Status: **M1-M4a are implemented** on `feature/initial-version`; M3 onwards
 are not started.
 
 **M1 — Skeleton, environment and options.** *(done)* `pyproject.toml`, `.venv`, package
@@ -107,12 +107,12 @@ exclusion, empty-password decryption, per-source error isolation (UC-02, UC-07).
 *Done when:* the five encrypted samples load as five source pages, and a renamed
 JPEG among them is skipped by name rather than crashing.
 
-**M3 — Detection.** Render at 72 dpi, binarise, project, band, largest-gap rule
+**M3 — Detection.** *(done)* Render at 72 dpi, binarise, project, band, largest-gap rule
 with the safety condition, padding, `--full-ink` (UC-05). *Done when:* all five
 samples report 228 ± 2 pt, a synthetic two-block page keeps both blocks, and a
 blank page yields none.
 
-**M4a — Ordered packer and composition.** Greedy pass, even leftover
+**M4a — Ordered packer and composition.** *(done)* Greedy pass, even leftover
 distribution, oversized-block handling, `--separator`; output written with pypdf
 (set the four page boxes, drop `/Annots`, `merge_transformed_page` with a
 translation). (UC-06)
