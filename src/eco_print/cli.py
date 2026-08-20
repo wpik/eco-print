@@ -51,6 +51,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="report what would be produced, and write nothing",
     )
     parser.add_argument(
+        "--gui", action="store_true",
+        help="open the graphical interface, pre-loaded with any inputs given",
+    )
+    parser.add_argument(
         "--version", action="version", version=f"eco-print {__version__}",
     )
     add_options(parser)
@@ -108,20 +112,25 @@ def report(result: RunResult, options: Options) -> None:
             )
 
 
+def start_gui(paths: list[str]) -> int:
+    """Open the window, or explain why it cannot be opened."""
+    from .gui import MissingGui, launch
+
+    try:
+        return launch(paths)
+    except MissingGui as exc:
+        print(f"eco-print: {exc}", file=sys.stderr)
+        return EXIT_FAILED
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point. Returns the process exit code."""
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if not args.paths:
-        # No arguments at all means the GUI (UC-03). It arrives with M6.
-        print(
-            "eco-print: the graphical interface is not built yet (M6).\n"
-            "Give input paths and an output path to use the command line, "
-            "or run --help.",
-            file=sys.stderr,
-        )
-        return EXIT_FAILED
+    if args.gui or not args.paths:
+        # No arguments at all means the GUI; --gui pre-loads it (UC-03).
+        return start_gui([str(path) for path in args.paths])
 
     options = Options.from_namespace(args)
     logging.basicConfig(

@@ -25,9 +25,30 @@ class TestInvocation:
         for flag in ("--force", "--dry-run", "--margin", "--reorder", "--recursive"):
             assert flag in help_text
 
-    def test_no_arguments_points_at_the_gui(self, capsys):
-        assert main([]) == EXIT_FAILED
-        assert "graphical interface" in capsys.readouterr().err
+    def test_no_arguments_starts_the_gui(self, monkeypatch):
+        """UC-03: bare `eco-print` is the graphical front end."""
+        started = []
+        monkeypatch.setattr("eco_print.cli.start_gui", lambda paths: started.append(paths) or 0)
+        assert main([]) == 0
+        assert started == [[]]
+
+    def test_the_gui_flag_preloads_its_inputs(self, monkeypatch, statement_dir: Path):
+        started = []
+        monkeypatch.setattr("eco_print.cli.start_gui", lambda paths: started.append(paths) or 0)
+        main(["--gui", str(statement_dir)])
+        assert started == [[str(statement_dir)]]
+
+    def test_a_missing_qt_is_explained_not_traced(self, monkeypatch, capsys):
+        """Qt is an optional extra; its absence is a sentence, not a traceback."""
+        from eco_print.cli import start_gui
+        from eco_print.gui import MissingGui
+
+        monkeypatch.setattr(
+            "eco_print.gui.launch",
+            lambda paths: (_ for _ in ()).throw(MissingGui("install PySide6")),
+        )
+        assert start_gui([]) == EXIT_FAILED
+        assert "install PySide6" in capsys.readouterr().err
 
     def test_a_lone_path_is_rejected(self, statement_dir: Path):
         """One path is ambiguous: it names neither an input nor an output."""

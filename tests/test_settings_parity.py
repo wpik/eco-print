@@ -5,14 +5,16 @@ structurally instead: these tests walk the fields of `Options` and demand that
 each one can be set from the command line and drawn in the GUI panel. Adding a
 field without wiring it up fails the suite rather than shipping.
 
-The GUI half currently checks the *declaration* each widget is built from — the
-control kind, label and range. When the panel itself lands with M6 it is added
-here, generated from the same fields, so the two halves stay symmetric.
+The GUI half is checked twice: against the *declaration* each widget is built
+from, and — when the GUI extra is installed — against the built panel itself, so
+a field cannot be declared correctly yet fail to appear on screen.
 """
 from __future__ import annotations
 
 import argparse
 from dataclasses import fields
+
+import pytest
 
 from eco_print.settings import GUI_BEHAVIOUR_FLAGS, Options, add_options
 
@@ -88,3 +90,51 @@ class TestExceptions:
     def test_no_excused_flag_is_also_an_option(self):
         flags = {f.metadata["flag"] for f in fields(Options)}
         assert flags.isdisjoint(GUI_BEHAVIOUR_FLAGS)
+
+
+class TestGuiPanelItself:
+    """The GUI half, asserted against the built panel rather than the metadata.
+
+    Skipped when the GUI extra is not installed — the CLI must remain testable
+    without Qt.
+    """
+
+    @pytest.fixture
+    def panel(self):
+        import os
+
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        pytest.importorskip("PySide6", reason="the GUI extra is not installed")
+        from PySide6.QtWidgets import QApplication
+
+        from eco_print.gui.settings_panel import SettingsPanel
+
+        QApplication.instance() or QApplication([])
+        return SettingsPanel(Options(), lambda options: None)
+
+    def test_every_option_is_present_in_the_panel(self, panel):
+        assert {f.name for f in fields(Options)} == set(panel._widgets)
+
+    def test_every_option_can_be_changed_through_the_panel(self, panel):
+        """The mirror of the CLI test above: no field is unreachable by hand."""
+        for f in fields(Options):
+            changed = _toggle(panel, f)
+            assert getattr(panel.options(), f.name) == changed, (
+                f"{f.name} cannot be set from the panel"
+            )
+        panel.reset()
+
+
+def _toggle(panel, f):
+    """Move one widget off its default and return the value it now holds."""
+    widget = panel._widgets[f.name]
+    kind = f.metadata["control"]
+    if kind == "check":
+        widget.setChecked(not widget.isChecked())
+        return widget.isChecked()
+    if kind == "combo":
+        other = [c for c in f.metadata["choices"] if c != f.default][0]
+        widget.setCurrentIndex(list(f.metadata["choices"]).index(other))
+        return other
+    widget.setValue(float(f.default) + 5)
+    return float(f.default) + 5

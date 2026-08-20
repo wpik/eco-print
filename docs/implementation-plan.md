@@ -44,9 +44,11 @@ if you would rather have the simpler dependency graph and don't care about AGPL.
         compose.py              # writes the output PDF
         cli.py                  # UC-01, UC-02
         gui/
-          __init__.py
+          __init__.py           # optional-extra guard
+          state.py              # the document list and crops, with no Qt in it
           app.py                # window, document list, wiring
           settings_panel.py     # UC-08 panel, generated from Options
+          cropview.py           # UC-04 interactive crop editor
           droparea.py           # UC-03 drag & drop
           cropview.py           # UC-04 interactive crop editor
           worker.py             # detection off the UI thread
@@ -54,8 +56,10 @@ if you would rather have the simpler dependency graph and don't care about AGPL.
         data/
           generate_fixtures.py  # regenerates the corpus; no dependencies
           *.pdf                 # the committed fixtures
-        test_detect.py test_packer.py test_loader.py test_compose.py test_cli.py
-        test_settings_parity.py # UC-08: every option reachable from both front ends
+        test_detect.py test_packer.py test_repack.py test_loader.py
+        test_compose.py test_cli.py test_fixtures.py
+        test_settings.py test_settings_parity.py
+        test_gui_state.py test_gui_widgets.py
 
 The core (`loader` → `detect` → `packer` → `compose`) has **no GUI import**. The
 GUI is an optional extra: `pip install -e .` gives a working CLI without Qt;
@@ -94,7 +98,7 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **M1-M5 are implemented**; the CLI is complete. M6 (GUI) is not started. on `feature/initial-version`; M3 onwards
+Status: **all milestones are implemented** on `feature/initial-version`. on `feature/initial-version`; M3 onwards
 are not started.
 
 **M1 — Skeleton, environment and options.** *(done)* `pyproject.toml`, `.venv`, package
@@ -136,7 +140,7 @@ bound.
 `5 blocks from 5 documents -> 2 pages` and the acceptance criteria of UC-01 and
 UC-02 hold end to end.
 
-**M6 — GUI.** Window and list, drag & drop of files and folders, background
+**M6 — GUI.** *(done)* Window and list, drag & drop of files and folders, background
 detection, live sheet-count status, output picker and save (UC-03); the settings
 panel **generated from `Options`**, with live recomputation and persistence
 between sessions (UC-08); then the crop editor: dimmed overlay, draggable edges,
