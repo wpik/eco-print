@@ -166,6 +166,44 @@ class TestWindow:
         assert "eco-print" in QGuiApplication.clipboard().text()
 
 
+class TestDetailsPane:
+    """UC-03, UC-08: "show detection details" must have a visible effect —
+    the gap that shipped it inert in M6."""
+
+    def test_the_pane_starts_hidden(self, window):
+        assert window(["statement-a"]).details_pane.isHidden()
+
+    def test_ticking_the_checkbox_shows_the_pane(self, window, qt_app):
+        w = window(["statement-a"])
+        w.show()
+        qt_app.processEvents()
+        w.settings._widgets["verbose"].setChecked(True)
+        qt_app.processEvents()
+        assert w.details_pane.isVisible()
+
+    def test_unticking_hides_it_again(self, window, qt_app):
+        w = window(["statement-a"])
+        w.show()
+        qt_app.processEvents()
+        w.settings._widgets["verbose"].setChecked(True)
+        w.settings._widgets["verbose"].setChecked(False)
+        qt_app.processEvents()
+        assert not w.details_pane.isVisible()
+
+    def test_the_pane_contains_the_real_report(self, window):
+        w = window(["with-footer"])
+        w.settings._widgets["verbose"].setChecked(True)
+        assert "gap-cut" in w.details.toPlainText()
+
+    def test_the_pane_follows_list_changes(self, window):
+        w = window(["statement-a"])
+        w.settings._widgets["verbose"].setChecked(True)
+        w.list.setCurrentRow(0)
+        w._remove_selected()
+        assert "statement-a.pdf" not in w.details.toPlainText()
+        assert "nothing to report" in w.details.toPlainText()
+
+
 class TestCropView:
     def test_the_view_reports_a_drag_in_pdf_coordinates(self, qt_app, data_dir: Path):
         from eco_print.gui.cropview import CropView

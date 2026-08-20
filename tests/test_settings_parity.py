@@ -138,3 +138,161 @@ def _toggle(panel, f):
         return other
     widget.setValue(float(f.default) + 5)
     return float(f.default) + 5
+
+
+class TestEffectsAreReal:
+    """UC-08: reachability is not the whole requirement.
+
+    A widget that changes `Options` but that nothing downstream reads is
+    reachable and useless at once — exactly the shape `verbose` took in the
+    GUI before the Details pane existed to consume it (M6 -> M7). Each option
+    here is exercised against the stage it is documented to affect, and the
+    assertion is that the stage's *output* differs, not merely that `Options`
+    itself does.
+    """
+
+    #: field name -> the stage it is documented to affect (UC-08's mapping table)
+    STAGES = {
+        "margin": "packing",
+        "gap": "packing",
+        "pad": "detection",
+        "page_size": "composition",
+        "full_ink": "detection",
+        "separator": "composition",
+        "reorder": "packing",
+        "recursive": "loading",
+        "verbose": "view",
+    }
+
+    def test_every_option_has_a_documented_stage(self):
+        """A new field with no entry here has not been checked at all."""
+        assert set(self.STAGES) == {f.name for f in fields(Options)}
+
+    def test_every_stage_actually_appears(self):
+        """Catches a typo'd stage name silently going unexercised below."""
+        exercised = {
+            name[len("test_"):].split("_changes_")[-1]
+            for name in dir(self)
+            if name.startswith("test_") and "_changes_" in name
+        }
+        assert set(self.STAGES.values()) <= exercised
+
+    # -- detection ------------------------------------------------------
+
+    def test_pad_changes_detection(self, data_dir: Path):
+        from eco_print.detect import detect
+        from eco_print.loader import load_pages
+
+        page = load_pages([data_dir / "statement-a.pdf"]).pages[0]
+        tight = detect(page, Options(pad=0.0))
+        padded = detect(page, Options(pad=30.0))
+        assert padded.box.height > tight.box.height
+
+    def test_full_ink_changes_detection(self, data_dir: Path):
+        from eco_print.detect import detect
+        from eco_print.loader import load_pages
+
+        page = load_pages([data_dir / "with-footer.pdf"]).pages[0]
+        default = detect(page, Options())
+        kept = detect(page, Options(full_ink=True))
+        assert kept.box.height > default.box.height
+        assert kept.method == "full-ink"
+
+    # -- packing ----------------------------------------------------------
+
+    def test_margin_changes_packing(self, blocks_from):
+        from eco_print.packer import pack_ordered
+
+        blocks = blocks_from([f"statement-{n}" for n in "abcde"])
+        wide_margin = pack_ordered(blocks, Options(margin=200.0))
+        narrow_margin = pack_ordered(blocks, Options(margin=5.0))
+        assert wide_margin.sheet_count >= narrow_margin.sheet_count
+        assert wide_margin.sheet_count > 2  # tight enough to force a difference
+
+    def test_gap_changes_packing(self, make_block):
+        from eco_print.packer import pack_ordered
+
+        usable = Options().usable_height()
+        blocks = [make_block(usable / 2), make_block(usable / 2)]
+        tight = pack_ordered(blocks, Options(gap=0.0))
+        loose = pack_ordered(blocks, Options(gap=40.0))
+        assert tight.sheet_count < loose.sheet_count
+
+    def test_reorder_changes_packing(self, blocks_from):
+        from eco_print.packer import pack
+
+        blocks = blocks_from([f"packing-{n}" for n in "abc"])
+        ordered = pack(blocks, Options(reorder=False))
+        reordered = pack(blocks, Options(reorder=True))
+        assert reordered.sheet_count < ordered.sheet_count
+
+    # -- composition --------------------------------------------------------
+
+    def test_page_size_changes_composition(self, blocks_from, tmp_path: Path):
+        from eco_print.compose import write
+        from eco_print.packer import pack_ordered
+        from pypdf import PdfReader
+
+        blocks = blocks_from(["statement-a"])
+        for size, expected_width in (("a4", 595.275), ("letter", 612.0)):
+            options = Options(page_size=size)
+            output = tmp_path / f"{size}.pdf"
+            write(pack_ordered(blocks, options), output, options)
+            width = float(PdfReader(str(output)).pages[0].mediabox.width)
+            assert width == pytest.approx(expected_width)
+
+    def test_separator_changes_composition(self, blocks_from, tmp_path: Path):
+        from eco_print.compose import write
+        from eco_print.detect import WHITE_THRESHOLD
+        from eco_print.packer import pack_ordered
+
+        def ink_count(path):
+            import numpy as np
+            import pypdfium2 as pdfium
+
+            document = pdfium.PdfDocument(str(path))
+            try:
+                raster = np.asarray(
+                    document[0].render(scale=1.0, grayscale=True).to_pil().convert("L")
+                )
+            finally:
+                document.close()
+            return int((raster < WHITE_THRESHOLD).sum())
+
+        blocks = blocks_from(["statement-a", "statement-b"])
+        plain = tmp_path / "plain.pdf"
+        ruled = tmp_path / "ruled.pdf"
+        write(pack_ordered(blocks, Options()), plain, Options())
+        write(pack_ordered(blocks, Options(separator=True)), ruled, Options(separator=True))
+        assert ink_count(ruled) > ink_count(plain)
+
+    # -- loading --------------------------------------------------------------
+
+    def test_recursive_changes_loading(self, statement_dir: Path, data_dir: Path):
+        import shutil
+
+        from eco_print.loader import expand_inputs
+
+        nested = statement_dir / "more"
+        nested.mkdir()
+        shutil.copy(data_dir / "landscape.pdf", nested / "landscape.pdf")
+
+        shallow = expand_inputs([statement_dir])
+        deep = expand_inputs([statement_dir], recursive=True)
+        assert len(deep) > len(shallow)
+
+    # -- view -----------------------------------------------------------------
+
+    def test_verbose_changes_view(self, statement_dir: Path, tmp_path: Path, capsys):
+        from eco_print.cli import main
+
+        output_a = tmp_path / "quiet.pdf"
+        main([str(statement_dir), str(output_a)])
+        quiet = capsys.readouterr().out
+
+        output_b = tmp_path / "loud.pdf"
+        main([str(statement_dir), str(output_b), "-v"])
+        loud = capsys.readouterr().out
+
+        assert "statement-a.pdf p1" not in quiet
+        assert "statement-a.pdf p1" in loud

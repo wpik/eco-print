@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
+from PySide6.QtGui import QFont, QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QSplitter,
     QVBoxLayout,
@@ -56,6 +57,10 @@ class MainWindow(QMainWindow):
 
         self.crop = CropView(self._crop_changed)
         self.settings = SettingsPanel(self.session.options, self._options_changed)
+
+        self.details = QPlainTextEdit()
+        self.details.setReadOnly(True)
+        self.details.setFont(QFont("Menlo, Consolas, monospace"))
 
         self.status = QLabel("no documents yet")
         self.output = QLineEdit(str(Path.home() / "combined.pdf"))
@@ -110,10 +115,17 @@ class MainWindow(QMainWindow):
         crop_buttons.addStretch(1)
         right_layout.addLayout(crop_buttons)
 
-        splitter = QSplitter()
-        splitter.addWidget(left)
-        splitter.addWidget(right)
-        splitter.setSizes([340, 660])
+        self.details_pane = QWidget()
+        details_layout = QVBoxLayout(self.details_pane)
+        details_layout.addWidget(QLabel("Details"))
+        details_layout.addWidget(self.details, 1)
+        self.details_pane.hide()
+
+        self.splitter = QSplitter()
+        self.splitter.addWidget(left)
+        self.splitter.addWidget(right)
+        self.splitter.addWidget(self.details_pane)
+        self.splitter.setSizes([340, 480, 0])
 
         output_row = QHBoxLayout()
         output_row.addWidget(QLabel("Output:"))
@@ -131,7 +143,7 @@ class MainWindow(QMainWindow):
 
         root = QWidget()
         layout = QVBoxLayout(root)
-        layout.addWidget(splitter, 1)
+        layout.addWidget(self.splitter, 1)
         layout.addWidget(self.settings)
         layout.addLayout(output_row)
         layout.addLayout(bottom)
@@ -315,6 +327,19 @@ class MainWindow(QMainWindow):
         estimate = self.session.estimate()
         self.status.setText(estimate.describe())
         self.save.setEnabled(estimate.blocks > 0)
+        self._refresh_details()
+
+    def _refresh_details(self) -> None:
+        """Show or hide the Details pane, and keep its text current (UC-08).
+
+        Visibility follows `Options.verbose` directly, so the checkbox has a
+        visible effect the moment it is ticked — the gap that made it inert
+        in the first place.
+        """
+        visible = self.session.options.verbose
+        self.details_pane.setVisible(visible)
+        if visible:
+            self.details.setPlainText(self.session.details())
 
     def _warn(self, errors) -> None:
         detail = "\n".join(f"{e.path.name}: {e.reason}" for e in errors[:8])

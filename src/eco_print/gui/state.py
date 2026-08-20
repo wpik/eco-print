@@ -54,6 +54,18 @@ class Entry:
         box = self.box
         return Block(self.page, box) if box else None
 
+    def describe_detail(self) -> str:
+        """One line for the Details pane — the GUI's rendering of `-v`.
+
+        A manual crop overrides what was detected, so the manual height is
+        reported rather than the (possibly very different) automatic one; what
+        detection originally decided is not lost, just superseded.
+        """
+        if self.is_manual:
+            box = self.manual_box
+            return f"{self.label}: {box.height:.0f}pt kept (manual)"
+        return self.detection.describe()
+
 
 @dataclass
 class Estimate:
@@ -235,6 +247,43 @@ class Session:
                 result.sheet_count - alternative.sheet_count, 0
             )
         return estimate
+
+    def details(self) -> str:
+        """The Details pane's content — the GUI's rendering of `-v` (UC-08).
+
+        Three parts, in the order a person would want to check them: what each
+        page's detection decided, what was skipped and why, and the packing
+        outcome sheet by sheet. Built here rather than in the window so it is
+        testable without Qt and cannot drift from what `-v` prints on the CLI.
+        """
+        lines: list[str] = []
+
+        if self.entries:
+            lines.append("Detection")
+            for entry in self.entries:
+                lines.append(f"  {entry.describe_detail()}")
+
+        if self.errors:
+            lines.append("")
+            lines.append("Skipped")
+            for error in self.errors:
+                lines.append(f"  {error.path.name}: {error.reason}")
+
+        result = self.packing()
+        if result:
+            sheet_word = "sheet" if result.sheet_count == 1 else "sheets"
+            lines.append("")
+            lines.append(f"Packing ({result.sheet_count} {sheet_word})")
+            for index, sheet in enumerate(result.sheets, start=1):
+                names = ", ".join(block.page.label for block in sheet.blocks)
+                lines.append(f"  sheet {index}: {names}")
+            for block in result.oversized:
+                lines.append(
+                    f"  warning: {block.page.label} is taller than one sheet "
+                    f"({block.height:.0f}pt); placed alone and clipped"
+                )
+
+        return "\n".join(lines) if lines else "nothing to report yet"
 
     def command_line(self, output: Path | None = None) -> str:
         """The equivalent `eco-print` invocation (UC-08).

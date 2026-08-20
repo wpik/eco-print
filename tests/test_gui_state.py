@@ -216,6 +216,67 @@ class TestSettingsAffectTheList:
         assert s.entries[0].detection is detection
 
 
+class TestDetails:
+    """The Details pane's content, and why it exists (UC-03, UC-08).
+
+    `--verbose` toggled `Options.verbose` in the GUI but nothing consumed it —
+    the checkbox had no visible effect. `details()` is what closes that gap.
+    """
+
+    def test_an_empty_session_says_so(self, session):
+        assert session().details() == "nothing to report yet"
+
+    def test_each_page_is_reported(self, session):
+        details = session(STATEMENTS).details()
+        for name in STATEMENTS:
+            assert f"{name}.pdf p1" in details
+
+    def test_the_detected_height_and_method_appear(self, session):
+        details = session(["with-footer"]).details()
+        assert "213pt kept" in details
+        assert "gap-cut" in details
+
+    def test_a_manual_crop_is_reported_as_manual(self, session):
+        s = session(["statement-a"])
+        s.set_manual_box(0, 800.0, 400.0)
+        details = s.details()
+        assert "400pt kept (manual)" in details
+        assert "ink-box" not in details
+
+    def test_a_blank_page_is_reported_as_skipped(self, session):
+        assert "blank, skipped" in session(["blank"]).details()
+
+    def test_skipped_inputs_are_named_with_their_reason(self, tmp_path: Path):
+        bad = tmp_path / "bad.pdf"
+        bad.write_bytes(b"not a pdf")
+        s = Session()
+        s.add_paths([bad])
+        details = s.details()
+        assert "Skipped" in details
+        assert "bad.pdf" in details
+
+    def test_the_packing_outcome_is_reported_sheet_by_sheet(self, session):
+        """The headline case: five documents, two sheets, 3 then 2."""
+        details = session(STATEMENTS).details()
+        assert "Packing (2 sheets)" in details
+        assert "sheet 1: statement-a.pdf p1, statement-b.pdf p1, statement-c.pdf p1" in details
+        assert "sheet 2: statement-d.pdf p1, statement-e.pdf p1" in details
+
+    def test_a_single_sheet_is_not_pluralised(self, session):
+        assert "Packing (1 sheet)" in session(["statement-a"]).details()
+
+    def test_an_oversized_block_is_warned_about(self, session):
+        assert "taller than one sheet" in session(["oversized"]).details()
+
+    def test_details_follow_a_settings_change(self, session):
+        """Detection details must reflect the live options, not a stale run."""
+        s = session(["with-footer"])
+        assert "gap-cut" in s.details()
+        s.apply_options(replace(s.options, full_ink=True))
+        assert "full-ink" in s.details()
+        assert "gap-cut" not in s.details()
+
+
 class TestCommandLineTransfer:
     def test_the_line_names_each_document_once(self, session, data_dir: Path):
         s = session(["multipage"])
