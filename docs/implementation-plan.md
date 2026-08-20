@@ -98,7 +98,7 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **all milestones, including M7, are implemented** on
+Status: **all milestones, including M7 and M8, are implemented** on
 `feature/initial-version`. on `feature/initial-version`; M3 onwards
 are not started.
 
@@ -182,6 +182,18 @@ fiddly, the paper-saving is already in hand.
 an unmodified or freshly-saved window is silent while closing a modified one
 prompts; `Exit` behaves identically to the window's close button; and the
 strengthened parity test passes for every option, `verbose` included.
+
+**M8 — post-save dialog.** *(done)* `Save PDF`'s confirmation is now a
+three-choice dialog rather than a plain acknowledgement: **Open Document**
+opens the written PDF in the system viewer and closes the dialog, **Open
+Folder** opens its containing directory and closes the dialog, **Close**
+dismisses it with no further action. Opening either way is delegated to
+`MainWindow._open`, a one-line wrapper around `QDesktopServices.openUrl`,
+kept as its own method purely so tests can stub it out — no test may ever
+actually launch Finder or a PDF viewer. *Done when:* each of the three
+choices produces the documented effect and nothing more, and dismissing the
+dialog by its own close control behaves like Close rather than crashing or
+falling through to an unintended action.
 
 ## 6. Testing strategy
 

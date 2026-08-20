@@ -146,9 +146,7 @@ class TestWindow:
         assert "2 pages" in w.status.text()
 
     def test_saving_writes_the_document(self, window, tmp_path: Path, monkeypatch):
-        from PySide6.QtWidgets import QMessageBox
-
-        monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+        monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
         w = window(STATEMENTS)
         target = tmp_path / "out.pdf"
         w.output.setText(str(target))
@@ -164,6 +162,97 @@ class TestWindow:
         w = window(["statement-a"])
         w._copy_command_line()
         assert "eco-print" in QGuiApplication.clipboard().text()
+
+
+class TestPostSaveDialog:
+    """The three-choice dialog after a successful save (#6).
+
+    `QMessageBox.exec` is stubbed to click one of the real buttons before
+    returning, rather than faking the whole dialog, so `clickedButton()` sees
+    exactly what a real click would set. `MainWindow._open` is stubbed
+    separately so no test ever actually launches Finder or a PDF viewer.
+    """
+
+    def _click(self, monkeypatch, label: str | None):
+        """Make the next QMessageBox.exec() click the button with this text
+        (or nothing at all, simulating the dialog's own close button)."""
+
+        def fake_exec(box_self):
+            if label is None:
+                return
+            for button in box_self.buttons():
+                if button.text() == label:
+                    button.click()
+                    return
+
+        monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+
+    def test_the_dialog_offers_exactly_three_choices(self, window, monkeypatch):
+        """Button order is a platform styling concern, not a behaviour to pin
+        down — only the set of choices matters here."""
+        seen = []
+
+        def fake_exec(box_self):
+            seen.extend(b.text() for b in box_self.buttons())
+
+        monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+        w = window(["statement-a"])
+        w._offer_to_open(Path("/tmp/whatever.pdf"), w.session.packing())
+        assert set(seen) == {"Open Document", "Open Folder", "Close"}
+
+    def test_open_document_opens_the_file_and_the_dialog_is_gone(
+        self, window, monkeypatch, tmp_path: Path
+    ):
+        opened = []
+        monkeypatch.setattr("eco_print.gui.app.MainWindow._open", lambda self, p: opened.append(p))
+        self._click(monkeypatch, "Open Document")
+
+        w = window(STATEMENTS)
+        target = tmp_path / "out.pdf"
+        w.output.setText(str(target))
+        w._save()
+
+        assert opened == [target]
+
+    def test_open_folder_opens_the_containing_directory(
+        self, window, monkeypatch, tmp_path: Path
+    ):
+        opened = []
+        monkeypatch.setattr("eco_print.gui.app.MainWindow._open", lambda self, p: opened.append(p))
+        self._click(monkeypatch, "Open Folder")
+
+        w = window(STATEMENTS)
+        target = tmp_path / "sub" / "out.pdf"
+        w.output.setText(str(target))
+        w._save()
+
+        assert opened == [target.parent]
+
+    def test_close_opens_nothing(self, window, monkeypatch, tmp_path: Path):
+        opened = []
+        monkeypatch.setattr("eco_print.gui.app.MainWindow._open", lambda self, p: opened.append(p))
+        self._click(monkeypatch, "Close")
+
+        w = window(STATEMENTS)
+        w.output.setText(str(tmp_path / "out.pdf"))
+        w._save()
+
+        assert opened == []
+
+    def test_dismissing_the_dialog_without_a_button_opens_nothing(
+        self, window, monkeypatch, tmp_path: Path
+    ):
+        """The dialog's own close control (or Escape) must behave like Close,
+        not crash or fall through to opening something."""
+        opened = []
+        monkeypatch.setattr("eco_print.gui.app.MainWindow._open", lambda self, p: opened.append(p))
+        self._click(monkeypatch, None)
+
+        w = window(STATEMENTS)
+        w.output.setText(str(tmp_path / "out.pdf"))
+        w._save()
+
+        assert opened == []
 
 
 class TestCloseConfirmationAndExit:
@@ -191,7 +280,7 @@ class TestCloseConfirmationAndExit:
     def test_closing_right_after_a_save_needs_no_confirmation(
         self, window, tmp_path: Path, monkeypatch
     ):
-        monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+        monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
         w = window(STATEMENTS)
         w.output.setText(str(tmp_path / "out.pdf"))
         w._save()
@@ -203,7 +292,7 @@ class TestCloseConfirmationAndExit:
     def test_a_change_after_saving_re_arms_the_prompt(
         self, window, tmp_path: Path, monkeypatch
     ):
-        monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+        monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
         asked = []
         monkeypatch.setattr(
             QMessageBox, "question",

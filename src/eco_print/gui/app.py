@@ -9,8 +9,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QGuiApplication, QKeySequence, QShortcut
+from PySide6.QtCore import QUrl, Qt
+from PySide6.QtGui import QDesktopServices, QFont, QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -319,12 +319,33 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, WINDOW_TITLE, f"Could not write {target}:\n{exc}")
             return
         self.session.mark_saved()
-        QMessageBox.information(
-            self,
-            WINDOW_TITLE,
+        self._offer_to_open(target, packing)
+
+    def _offer_to_open(self, target: Path, packing) -> None:
+        """After a successful save: open the document, open its folder, or
+        just close the dialog. Opening either way also closes it (#6)."""
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle(WINDOW_TITLE)
+        dialog.setText(
             f"Wrote {target}\n{packing.sheet_count} pages "
-            f"from {packing.block_count} blocks.",
+            f"from {packing.block_count} blocks."
         )
+        open_document = dialog.addButton("Open Document", QMessageBox.AcceptRole)
+        open_folder = dialog.addButton("Open Folder", QMessageBox.ActionRole)
+        close = dialog.addButton("Close", QMessageBox.RejectRole)
+        dialog.setDefaultButton(close)
+        dialog.exec()
+
+        clicked = dialog.clickedButton()
+        if clicked is open_document:
+            self._open(target)
+        elif clicked is open_folder:
+            self._open(target.parent)
+
+    def _open(self, path: Path) -> None:
+        """Hand `path` to the OS. Its own method so tests can stub it out
+        instead of actually launching Finder or a PDF viewer."""
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     # -- status -------------------------------------------------------------
 

@@ -75,9 +75,12 @@ nothing to a user who never asks for it.
    packing outcome. It updates with every change to the list or the settings,
    the same way the status line does.
 9. The user sets the output path and presses `Save PDF`.
-10. On success a confirmation appears with the final sheet count and a button to
-    reveal the file in the file manager. This is also the point at which the
-    window stops asking to confirm on close ([UC-03 close behaviour](#closing-the-window)).
+10. On success a dialog reports the final sheet count and offers three choices:
+    **Open Document** opens the written PDF in the system's default viewer and
+    closes the dialog; **Open Folder** opens the folder containing it and
+    closes the dialog; **Close** dismisses the dialog with no further action.
+    This save is also what stops the window asking to confirm on close
+    ([UC-03 close behaviour](#closing-the-window)).
 
 ## Rules
 
@@ -124,3 +127,7 @@ Exit button that skipped the check would be a second, inconsistent way to quit.
   the confirmation.
 - Ticking "show detection details" opens the Details pane with content; the
   panel is not merely present but reports what was actually kept and dropped.
+- After a successful save, choosing **Open Document** opens the written file
+  and the dialog closes; choosing **Open Folder** opens its containing
+  directory and the dialog closes; choosing **Close** opens nothing and the
+  dialog simply closes.
