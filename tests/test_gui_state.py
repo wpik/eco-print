@@ -27,6 +27,67 @@ def session(data_dir: Path):
     return build
 
 
+class TestReorderPrompt:
+    """Whether Save should offer to enable minimise-pages first (#12).
+
+    The three packing-* fixtures are the established case where reordering
+    genuinely helps (3 sheets ordered, 2 reordered) -- the same fixtures
+    UC-06's headline test and TestEffectsAreReal use.
+    """
+
+    PACKING = [f"packing-{n}" for n in "abc"]
+
+    def test_offered_when_reorder_would_help(self, session):
+        s = session(self.PACKING)
+        assert s.should_offer_reorder() is True
+
+    def test_not_offered_when_reorder_is_already_on(self, session):
+        s = session(self.PACKING, Options(reorder=True))
+        assert s.should_offer_reorder() is False
+
+    def test_not_offered_when_reordering_would_not_help(self, session):
+        """The five statements already pack optimally in order."""
+        s = session(STATEMENTS)
+        assert s.should_offer_reorder() is False
+
+    def test_not_offered_with_nothing_loaded(self, session):
+        assert session().should_offer_reorder() is False
+
+    def test_declining_suppresses_the_prompt(self, session):
+        s = session(self.PACKING)
+        s.decline_reorder_prompt()
+        assert s.should_offer_reorder() is False
+
+    def test_declining_does_not_change_the_setting(self, session):
+        s = session(self.PACKING)
+        s.decline_reorder_prompt()
+        assert s.options.reorder is False
+
+    def test_a_list_change_after_declining_re_arms_the_prompt(self, session):
+        s = session(self.PACKING)
+        s.decline_reorder_prompt()
+        assert s.should_offer_reorder() is False
+        s.remove(0)                 # a genuine change, whatever its effect
+        s.add_paths([Path("tests/data/packing-a.pdf")])
+        assert s.reorder_prompt_dismissed_at != s.revision
+
+    def test_an_irrelevant_setting_change_re_arms_the_prompt(self, session):
+        """Confirms re-arming does not depend on the change altering the
+        packing outcome -- only on the state having moved on at all."""
+        s = session(self.PACKING)
+        s.decline_reorder_prompt()
+        before = s.estimate().reorder_would_save
+        s.apply_options(replace(s.options, separator=True))
+        assert s.estimate().reorder_would_save == before   # unaffected
+        assert s.should_offer_reorder() is True             # but re-armed
+
+    def test_a_repeated_decline_at_the_same_revision_is_idempotent(self, session):
+        s = session(self.PACKING)
+        s.decline_reorder_prompt()
+        s.decline_reorder_prompt()
+        assert s.should_offer_reorder() is False
+
+
 class TestDirtyTracking:
     """UC-03: the close prompt fires only for real, unsaved changes.
 

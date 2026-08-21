@@ -83,7 +83,18 @@ nothing to a user who never asks for it.
    packing outcome. It updates with every change to the list or the settings,
    the same way the status line does.
 9. The user sets the output path and presses `Save PDF`.
-10. On success a dialog reports the final sheet count and offers three choices:
+10. If **minimise pages (ignore order)** is currently off and turning it on
+    would use fewer sheets, a dialog asks first: *"Minimising pages would save
+    N sheets (X -> Y pages). Enable it for this document?"* Choosing **Yes**
+    ticks the checkbox through the same path a manual click would — the
+    status line, the settings panel and the remembered setting all update —
+    and the save then proceeds with it on. Choosing **No** (or dismissing the
+    dialog) leaves the setting untouched and the save proceeds as configured;
+    the question is not asked again until the document list, a crop, or a
+    setting changes, so repeated saves of an unchanged batch are not
+    interrupted a second time ([UC-06](UC-06-page-packing.md)). The dialog is
+    skipped entirely when reordering is already on, or would not help.
+11. On success a dialog reports the final sheet count and offers three choices:
     **Open Document** opens the written PDF in the system's default viewer and
     closes the dialog; **Open Folder** opens the folder containing it and
     closes the dialog; **Close** dismisses the dialog with no further action.
@@ -154,3 +165,12 @@ quit.
   left-to-right order.
 - `Save PDF` is the window's default button; `Copy as command line` and
   `Exit` are not, and cannot become it by receiving keyboard focus.
+- Pressing `Save PDF` on the three `packing-*` fixtures, with minimise-pages
+  off, asks first; the same fixtures with minimise-pages already on, or the
+  five `statement-*` fixtures (already optimal in order), save without
+  asking.
+- Answering **Yes** ticks the checkbox, updates the status line, and the
+  written file uses fewer sheets than it would have unreordered.
+- Answering **No** leaves the checkbox unticked and the file is written as
+  configured; saving the same, unchanged batch again does not ask a second
+  time. Changing the list, a crop, or a setting re-arms it.

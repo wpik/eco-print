@@ -7,6 +7,7 @@ wiring and wording.
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QUrl, Qt
@@ -319,6 +320,8 @@ class MainWindow(QMainWindow):
         self.status.setText("command line copied to the clipboard")
 
     def _save(self) -> None:
+        if self.session.should_offer_reorder():
+            self._offer_reorder()
         packing = self.session.packing()
         if packing is None:
             return
@@ -330,6 +333,30 @@ class MainWindow(QMainWindow):
             return
         self.session.mark_saved()
         self._offer_to_open(target, packing)
+
+    def _offer_reorder(self) -> None:
+        """Ask, before writing, whether to turn minimise-pages on (#12).
+        Either answer lets the save proceed -- only whether reorder is
+        enabled first differs."""
+        estimate = self.session.estimate()
+        saved = estimate.reorder_would_save
+        sheet_word = "sheet" if saved == 1 else "sheets"
+        answer = QMessageBox.question(
+            self,
+            WINDOW_TITLE,
+            f"Minimising pages would save {saved} {sheet_word} "
+            f"({estimate.sheets} -> {estimate.sheets - saved} pages).\n"
+            "Enable it for this document?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer == QMessageBox.Yes:
+            # The same path a manual click on the checkbox takes: the
+            # checkbox ticks, the status line updates, and the setting is
+            # remembered -- nothing about this is a hidden one-off (#12).
+            self.settings.set_options(replace(self.session.options, reorder=True))
+        else:
+            self.session.decline_reorder_prompt()
 
     def _offer_to_open(self, target: Path, packing) -> None:
         """After a successful save: open the document, open its folder, or

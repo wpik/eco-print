@@ -304,6 +304,111 @@ class TestWindow:
         assert "eco-print" in QGuiApplication.clipboard().text()
 
 
+class TestReorderOffer:
+    """Save PDF may ask, before writing, whether to enable minimise-pages
+    (#12). QMessageBox.exec is stubbed to skip the separate post-save
+    Open/Folder/Close dialog, which is not this feature's concern."""
+
+    PACKING = [f"packing-{n}" for n in "abc"]
+
+    def _skip_post_save_dialog(self, monkeypatch):
+        monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
+
+    def test_the_prompt_appears_when_reordering_would_help(
+        self, window, monkeypatch, tmp_path: Path
+    ):
+        self._skip_post_save_dialog(monkeypatch)
+        asked = []
+        monkeypatch.setattr(
+            QMessageBox, "question",
+            lambda *a, **k: asked.append(True) or QMessageBox.No,
+        )
+        w = window(self.PACKING)
+        w.output.setText(str(tmp_path / "out.pdf"))
+        w._save()
+        assert asked
+
+    def test_no_prompt_when_reordering_would_not_help(
+        self, window, monkeypatch, tmp_path: Path
+    ):
+        self._skip_post_save_dialog(monkeypatch)
+        asked = []
+        monkeypatch.setattr(
+            QMessageBox, "question",
+            lambda *a, **k: asked.append(True) or QMessageBox.No,
+        )
+        w = window(STATEMENTS)
+        w.output.setText(str(tmp_path / "out.pdf"))
+        w._save()
+        assert not asked
+
+    def test_saying_yes_ticks_the_checkbox_and_writes_the_smaller_document(
+        self, window, monkeypatch, tmp_path: Path
+    ):
+        self._skip_post_save_dialog(monkeypatch)
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+
+        w = window(self.PACKING)
+        target = tmp_path / "out.pdf"
+        w.output.setText(str(target))
+        w._save()
+
+        assert w.settings._widgets["reorder"].isChecked() is True
+        assert w.session.options.reorder is True
+
+        from pypdf import PdfReader
+
+        assert len(PdfReader(str(target)).pages) == 2   # not 3
+
+    def test_saying_no_leaves_the_setting_untouched_and_writes_as_configured(
+        self, window, monkeypatch, tmp_path: Path
+    ):
+        self._skip_post_save_dialog(monkeypatch)
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.No)
+
+        w = window(self.PACKING)
+        target = tmp_path / "out.pdf"
+        w.output.setText(str(target))
+        w._save()
+
+        assert w.session.options.reorder is False
+
+        from pypdf import PdfReader
+
+        assert len(PdfReader(str(target)).pages) == 3
+
+    def test_saying_no_does_not_ask_again_on_an_immediate_second_save(
+        self, window, monkeypatch, tmp_path: Path
+    ):
+        self._skip_post_save_dialog(monkeypatch)
+        asked = []
+        monkeypatch.setattr(
+            QMessageBox, "question",
+            lambda *a, **k: asked.append(True) or QMessageBox.No,
+        )
+        w = window(self.PACKING)
+        w.output.setText(str(tmp_path / "out.pdf"))
+        w._save()
+        w._save()
+        assert len(asked) == 1
+
+    def test_a_settings_change_after_declining_re_arms_the_prompt(
+        self, window, monkeypatch, tmp_path: Path
+    ):
+        self._skip_post_save_dialog(monkeypatch)
+        asked = []
+        monkeypatch.setattr(
+            QMessageBox, "question",
+            lambda *a, **k: asked.append(True) or QMessageBox.No,
+        )
+        w = window(self.PACKING)
+        w.output.setText(str(tmp_path / "out.pdf"))
+        w._save()
+        w.settings._widgets["separator"].setChecked(True)
+        w._save()
+        assert len(asked) == 2
+
+
 class TestPostSaveDialog:
     """The three-choice dialog after a successful save (#6).
 

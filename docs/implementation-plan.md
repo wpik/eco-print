@@ -98,7 +98,7 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **all milestones, including M7-M11, are implemented** on
+Status: **all milestones, including M7-M12, are implemented** on
 `feature/initial-version`. on `feature/initial-version`; M3 onwards
 are not started.
 
@@ -247,6 +247,35 @@ risk of Enter in the Output field triggering a save while typing). *Done
 when:* all three buttons render on one row in the specified order; `Save`
 reports `isDefault() == True`; `Copy` and `Exit` report `isDefault() ==
 False` and `autoDefault() == False`.
+
+**M12 — offer to minimise pages before saving.** *(done)* `Save PDF` now asks
+first whenever minimise-pages is off and turning it on would use fewer
+sheets: *"Minimising pages would save N sheets (X -> Y pages). Enable it for
+this document?"* Two design decisions, settled with the user before
+implementation:
+
+- **Yes turns the setting on for real** -- through `SettingsPanel.set_options`,
+  the same path a manual click on the checkbox takes -- rather than applying
+  reorder as a hidden one-off for this write alone. The checkbox, the status
+  line, the remembered setting and the file on disk stay in agreement; nothing
+  about the output is invisible in the UI afterward.
+- **Declining suppresses the prompt** until the state that produced the
+  suggestion actually changes. This reuses `Session.revision` -- already
+  bumped by every list edit, crop override and settings change for the
+  close-confirmation feature (M9) -- as the suppression key, rather than adding a
+  second tracking mechanism: `reorder_prompt_dismissed_at` just records the
+  revision at the moment of decline, and re-arms the instant `revision` moves
+  past it, whether or not the specific change altered the packing outcome.
+
+The check and its state live in `Session.should_offer_reorder` /
+`decline_reorder_prompt` (`state.py`, no Qt), so they are tested without a
+display; `MainWindow._offer_reorder` in `app.py` is thin wiring around them.
+*Done when:* the three `packing-*` fixtures (3 sheets ordered, 2 reordered)
+trigger the prompt and the five `statement-*` fixtures (already optimal) do
+not; Yes measurably changes the written output's sheet count; No leaves it
+unreordered and does not ask again on an immediate second save of the same
+batch; and a settings change after a decline re-arms it even when that change
+does not itself affect whether reordering would help.
 
 ## 6. Testing strategy
 

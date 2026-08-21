@@ -108,6 +108,7 @@ class Session:
     errors: list[SourceError] = field(default_factory=list)
     revision: int = 0
     saved_revision: int = 0
+    reorder_prompt_dismissed_at: int | None = None
 
     @property
     def dirty(self) -> bool:
@@ -120,6 +121,24 @@ class Session:
 
     def _bump(self) -> None:
         self.revision += 1
+
+    def should_offer_reorder(self) -> bool:
+        """Whether Save should ask about enabling minimise-pages first.
+
+        Reuses `revision` -- already bumped by every list edit, crop
+        override and settings change -- as the suppression key: once the
+        user declines for the current state, the prompt stays quiet until
+        something that could change the answer actually changes.
+        """
+        if self.options.reorder:
+            return False
+        if self.reorder_prompt_dismissed_at == self.revision:
+            return False
+        return self.estimate().reorder_would_save > 0
+
+    def decline_reorder_prompt(self) -> None:
+        """Record a "no", so the prompt does not repeat until state changes."""
+        self.reorder_prompt_dismissed_at = self.revision
 
     # -- building the list --------------------------------------------------
 

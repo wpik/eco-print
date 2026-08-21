@@ -61,6 +61,13 @@ The reordered result is only better sometimes, and the tool says which:
 When reordering saves nothing, the run reports that too, so the user learns that
 the flag is not needed for this kind of batch.
 
+The GUI surfaces the same fact twice: continuously, as part of the live status
+line while the flag is off ("minimising pages would save N"); and once, as an
+explicit question the moment it matters — `Save PDF` asks first whenever
+turning the flag on would actually reduce the sheet count, rather than leaving
+the user to notice the status line's hint on their own
+([UC-03](UC-03-gui-select-and-drop.md)).
+
 ## Distributing the leftover space
 
 In both modes, the space left over after placing a sheet's blocks is distributed
