@@ -45,8 +45,33 @@ jobs:
         working-directory: packaging
         run: python smoke_test.py
 
+      # macOS only: `dist/` holds both the finished eco-print.app and the
+      # loose dist/eco-print/ onedir folder BUNDLE was built from -- the
+      # latter is intermediate build output, not something to ship, and
+      # uploading it too would silently double the artifact for no reason.
+      # The .app is archived with `ditto` rather than left as a raw
+      # directory for actions/upload-artifact to zip itself: PyInstaller's
+      # macOS bundle uses symlinks between Contents/Frameworks and
+      # Contents/Resources to avoid storing the same libraries twice on
+      # disk, and upload-artifact's zip step does not preserve them --
+      # it was found to materialize each symlink as a full real copy,
+      # roughly doubling the bundle's size on its own. `ditto` is Apple's
+      # own tool for archiving .app bundles and preserves them correctly.
+      - name: Archive the .app bundle (macOS)
+        if: runner.os == 'macOS'
+        working-directory: packaging/dist
+        run: ditto -c -k --sequesterRsrc --keepParent eco-print.app eco-print-macos.zip
+
       - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
         with:
           name: ${{ matrix.artifact-name }}
-          path: packaging/dist/*
+          path: packaging/dist/eco-print-macos.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os != 'macOS'
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: packaging/dist/eco-print/*
           if-no-files-found: error

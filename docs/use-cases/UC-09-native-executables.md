@@ -75,10 +75,39 @@ PySide6 ships far more than this project uses — WebEngine (an embedded
 Chromium build), Qml/Quick, Multimedia, 3D, the mobile/sensor modules, and
 more. A naive `--collect-all PySide6` build, tried first, produced a
 663&nbsp;MB `.app` for a tool that only imports `QtCore`, `QtGui` and
-`QtWidgets` (verified by grepping `src/` for every `PySide6` import). The
-spec file excludes every unused Qt submodule explicitly; the same build with
-those exclusions came to 127&nbsp;MB — a fifth of the size, with no change in
-behaviour, verified by re-running the same checks against it.
+`QtWidgets` (verified by grepping `src/` for every `PySide6` import).
+Excluding every unused top-level Qt submodule brought the same build to
+127&nbsp;MB.
+
+That exclusion list only stops modules PyInstaller reaches by walking Python
+imports, though — it does not stop a second, separate mechanism: Qt's own
+plugin directories (`platforminputcontexts/`, `tls/`, ...) are bundled
+wholesale by category, and one plugin needing an extra Qt module is enough to
+drag that whole module back in regardless of the exclusion list. This is how
+QtQml, QtQuick, QtVirtualKeyboard, QtNetwork, QtOpenGL, QtSvg and QtPdf all
+survived the first pass despite being explicitly excluded — none of them are
+used, but a virtual (on-screen) keyboard input plugin, three TLS backend
+plugins, an SVG icon plugin and a "render a PDF as an image" plugin, none of
+which this desktop app with no network access and no on-screen keyboard has
+any use for, each pulled one back in.
+
+The fix filters `Analysis`'s output directly, after it runs, rather than
+trying to prevent the pull-in in the first place. **One exclusion in that
+list was wrong and is documented as a mistake, not silently corrected**:
+`QtDBus` looked like the same kind of unused weight, but `otool -L` on
+`QtGui.framework` shows it is a hard, load-time dependency of `QtGui` itself
+on macOS — not something only an optional plugin reaches for. Excluding it
+made `import PySide6.QtGui` fail outright, caught by actually launching the
+built GUI rather than trusting the exclusion list on paper; the fix was to
+verify each candidate individually with `otool -L` before removing it, not
+to assume "unused Qt module" always means "safe to strip." With that
+correction, the build came to 103&nbsp;MB.
+
+Every step of this was verified against a real build, not assumed: `otool -L`
+confirmed what actually links what, the smoke test's real merge still
+produces the documented 2-page result at each stage, and a full GUI exercise
+(loading a real document, painting the crop view, toggling settings) was run
+against a reproduction of the final exclusion set before it was trusted.
 
 ## Continuous integration
 
@@ -92,6 +121,30 @@ project, asserting the built executable produces the documented 2-page
 result before the artifact is uploaded. A packaging mistake (a missing Qt
 plugin, a hidden import PyInstaller's static analysis missed, a broken
 relative import) fails CI with a real subprocess run, not a mock.
+
+### The macOS artifact is not just the .app, twice
+
+The first CI run produced a macOS artifact of 327&nbsp;MB against a 103&nbsp;MB
+`.app` — a gap too large to be the exclusion list's doing, found by
+downloading the actual artifact and measuring what was in it rather than
+guessing. Two separate causes, both fixed in the upload step rather than the
+build itself:
+
+- PyInstaller's macOS bundle uses symlinks between `Contents/Frameworks` and
+  `Contents/Resources` so the same libraries are not stored twice on disk;
+  `actions/upload-artifact`'s own zip step does not preserve symlinks, and
+  was found to materialize each one as a full real copy — doubling the
+  bundle's size on its own. The fix is to archive the `.app` with `ditto`
+  (Apple's own tool for this, which does preserve them) before handing a
+  single file to `upload-artifact`, rather than pointing it at the bundle
+  directory.
+- `dist/` holds both the finished `eco-print.app` and the loose
+  `dist/eco-print/` onedir folder BUNDLE was built from — intermediate
+  output, not something to ship. The workflow previously uploaded
+  `packaging/dist/*`, which grabbed both; it now uploads only the `.app` zip
+  on macOS, and only `dist/eco-print/` explicitly on the other two platforms
+  (which never had a second copy, but this makes the intent explicit rather
+  than relying on there happening to be nothing else in `dist/`).
 
 Builds are **unsigned**. Users see a one-time "unknown developer" warning on
 first launch on macOS and Windows, which they click through. Code signing
@@ -125,3 +178,10 @@ credentials — and is deliberately out of scope for now.
 - Running the Windows build from `cmd.exe` with file arguments prints the
   same summary line the other two platforms do; double-clicking it opens the
   GUI with no console window.
+- Every module removed from the build is verified with `otool -L` (or the
+  platform equivalent) to confirm nothing load-bearing actually depends on
+  it, not assumed safe because it looked unused -- `QtDBus` is the concrete
+  example of why this matters.
+- The downloaded macOS CI artifact is close to the size of the `.app` it
+  contains -- not roughly double it from a duplicated onedir folder, and not
+  further inflated by symlinks-turned-real-copies.
