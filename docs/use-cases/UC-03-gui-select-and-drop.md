@@ -34,8 +34,9 @@ means CLI mode ([UC-01](UC-01-cli-merge-explicit-files.md)); the two never mix.
     |   [ ] show detection details          [ Reset to defaults ]             |
     +--------------------------------------------------------------------------+
     |  Output: [ ~/Documents/combined.pdf        ] [Browse]                    |
-    |  Result: 5 blocks -> 2 pages (saves 3 sheets)     [Copy cmd] [Save PDF]   |
-    |                                                              [   Exit  ]  |
+    |  Result: 5 blocks -> 2 pages    [Copy cmd] [ Save PDF ] [ Exit ]          |
+    |                                              ^^^^^^^^^^                   |
+    |                                          default (blue on macOS)          |
     +--------------------------------------------------------------------------+
 
 The settings block is collapsed by default — the tool must be usable by dropping
@@ -116,10 +117,17 @@ out:
 - Making a further change after a save re-arms the prompt: the state on disk no
   longer matches what is on screen.
 
-An **Exit** button sits directly below `Save PDF`, on its own row, and closes
-the window the same way the window's own close control does, so it is subject
-to the same confirmation — an Exit button that skipped the check would be a
-second, inconsistent way to quit.
+**Copy as command line**, **Save PDF** and **Exit** share one row, left to
+right in that order. `Save PDF` is the window's default button — the one
+platform styling distinguishes (blue, on macOS) — and the only one of the
+three that is; `Copy as command line` and `Exit` are explicitly excluded from
+ever taking on that role, including by keyboard focus, so the emphasis never
+drifts to whichever button was clicked or tabbed to last.
+
+`Exit` closes the window the same way the window's own close control does, so
+it is subject to the same confirmation ([above](#closing-the-window)) — an
+Exit button that skipped the check would be a second, inconsistent way to
+quit.
 
 ## Acceptance criteria
 
@@ -142,4 +150,7 @@ second, inconsistent way to quit.
 - Opening the window with every setting at its default leaves the Settings
   panel collapsed; opening it with any one setting remembered away from its
   default leaves the panel expanded.
-- `Exit` renders on its own row, below `Save PDF`.
+- `Copy as command line`, `Save PDF` and `Exit` render on one row, in that
+  left-to-right order.
+- `Save PDF` is the window's default button; `Copy as command line` and
+  `Exit` are not, and cannot become it by receiving keyboard focus.

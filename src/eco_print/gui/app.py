@@ -137,16 +137,23 @@ class MainWindow(QMainWindow):
 
         bottom = QHBoxLayout()
         bottom.addWidget(self.status, 1)
+
         copy = QPushButton("Copy as command line")
         copy.clicked.connect(self._copy_command_line)
+        copy.setAutoDefault(False)
         bottom.addWidget(copy)
+
+        # Save PDF is the window's default button: Enter activates it (in
+        # addition to the existing Cmd+S shortcut) and macOS renders it in
+        # blue for as long as it holds that role. The other two buttons are
+        # explicitly excluded from ever borrowing that role via focus.
+        self.save.setDefault(True)
         bottom.addWidget(self.save)
 
-        exit_row = QHBoxLayout()
-        exit_row.addStretch(1)
         self.exit_button = QPushButton("Exit")
         self.exit_button.clicked.connect(self.close)
-        exit_row.addWidget(self.exit_button)
+        self.exit_button.setAutoDefault(False)
+        bottom.addWidget(self.exit_button)
 
         root = QWidget()
         layout = QVBoxLayout(root)
@@ -154,7 +161,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.settings)
         layout.addLayout(output_row)
         layout.addLayout(bottom)
-        layout.addLayout(exit_row)
         return root
 
     def _install_shortcuts(self) -> None:

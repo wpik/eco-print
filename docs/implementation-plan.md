@@ -98,7 +98,7 @@ special case anywhere else.
 ## 5. Milestones
 
 Each milestone ends with something runnable and its tests green.
-Status: **all milestones, including M7-M10, are implemented** on
+Status: **all milestones, including M7-M11, are implemented** on
 `feature/initial-version`. on `feature/initial-version`; M3 onwards
 are not started.
 
@@ -228,6 +228,25 @@ checkbox's real rendered content rather than the centre of the row it had
 been stretched to fill by its layout, which was itself a flaw in the first
 attempt at a regression test. The fix is applied as the correct, more robust
 pattern regardless, but needs confirming against a real display.
+
+**M11 — Save PDF as the default button, one button row.** *(done)* Copy as
+command line, Save PDF and Exit merged back onto a single row (Copy, Save,
+Exit, left to right), reverting the two-row split from M9 per explicit
+request. `Save.setDefault(True)` marks it as the window's default button,
+which on macOS renders it distinctly (blue); `Copy` and `Exit` get
+`setAutoDefault(False)` so neither can borrow that role by taking keyboard
+focus.
+
+One assumption from the M9-era plan turned out to be wrong and is corrected
+here: `setDefault` was expected to also wire Enter/Return to activate Save
+anywhere in the window, layered on top of the existing Cmd+S shortcut.
+Testing showed this does not happen -- Enter-activates-default-button is
+`QDialog`-specific plumbing that a plain `QMainWindow` does not have, so
+`setDefault(True)` here is purely visual with no functional side effect (no
+risk of Enter in the Output field triggering a save while typing). *Done
+when:* all three buttons render on one row in the specified order; `Save`
+reports `isDefault() == True`; `Copy` and `Exit` report `isDefault() ==
+False` and `autoDefault() == False`.
 
 ## 6. Testing strategy
 

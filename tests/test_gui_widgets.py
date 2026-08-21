@@ -213,14 +213,36 @@ class TestWindow:
         w = MainWindow([], store=store)
         assert w.settings.isChecked() is False
 
-    def test_exit_sits_on_its_own_row_below_save(self, window, qt_app):
-        """Exit and Save PDF must not share a row (per explicit request)."""
+    def test_copy_save_exit_share_one_row_in_that_order(self, window, qt_app):
+        """Per explicit request: Copy, Save (default), Exit, left to right,
+        all on one row."""
         w = window(["statement-a"])
         w.show()
         qt_app.processEvents()
-        save_top = w.save.mapTo(w, w.save.rect().topLeft()).y()
-        exit_top = w.exit_button.mapTo(w, w.exit_button.rect().topLeft()).y()
-        assert exit_top > save_top
+
+        copy = _find_button(w, "Copy as command line")
+        assert copy is not None
+
+        copy_pos = copy.mapTo(w, copy.rect().topLeft())
+        save_pos = w.save.mapTo(w, w.save.rect().topLeft())
+        exit_pos = w.exit_button.mapTo(w, w.exit_button.rect().topLeft())
+
+        assert copy_pos.y() == save_pos.y() == exit_pos.y()
+        assert copy_pos.x() < save_pos.x() < exit_pos.x()
+
+    def test_save_is_the_only_default_button(self, window):
+        """UC-03: Save PDF alone is marked default (and so, on macOS,
+        rendered blue); Copy and Exit must never borrow that role, even via
+        keyboard focus."""
+        w = window(["statement-a"])
+        copy = _find_button(w, "Copy as command line")
+
+        assert w.save.isDefault() is True
+        assert copy.isDefault() is False
+        assert w.exit_button.isDefault() is False
+
+        assert copy.autoDefault() is False
+        assert w.exit_button.autoDefault() is False
 
     def test_a_row_shows_its_height(self, window):
         assert "163 pt" in window(["statement-a"]).list.item(0).text()
