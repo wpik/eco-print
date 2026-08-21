@@ -17,7 +17,13 @@ source, so the result prints exactly as legibly as the originals.
 
 ### Install
 
-Python 3.11 or newer, in a virtual environment:
+No Python at all: download the executable for your platform from the
+[Releases](../../releases) page and run it. It opens the GUI with no
+arguments, or works as the CLI documented below when given some -- one file,
+same tool either way (see [UC-09](docs/use-cases/UC-09-native-executables.md)
+for how it's built and its one platform-specific quirk, the Windows console).
+
+Or, with Python 3.11 or newer, in a virtual environment:
 
     python3 -m venv .venv
     ./.venv/bin/pip install -e .
@@ -100,3 +106,14 @@ A test asserts that regenerating the corpus reproduces the committed bytes, so i
 cannot drift from what the documentation says it contains.
 
 `docs/` holds the [use cases](docs/use-cases/) the tool is built against.
+
+### Building a native executable
+
+    ./.venv/bin/pip install -e '.[gui,packaging]'
+    cd packaging
+    pyinstaller --noconfirm eco-print.spec
+    python smoke_test.py
+
+Builds only for the platform you run it on -- PyInstaller does not
+cross-compile. `.github/workflows/build.yml` builds all three platforms on a
+version tag or on demand; see [UC-09](docs/use-cases/UC-09-native-executables.md).

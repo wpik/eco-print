@@ -123,8 +123,33 @@ def start_gui(paths: list[str]) -> int:
         return EXIT_FAILED
 
 
+def _attach_windows_console() -> None:
+    """Join the launching terminal's console on a windowed Windows build.
+
+    A packaged --windowed build has no console of its own, so printed output
+    silently vanishes even when the user ran the exe from cmd.exe or
+    PowerShell -- CLI mode would otherwise look broken despite working
+    correctly underneath. AttachConsole(-1) attaches to the parent process's
+    console when one launched this process, and is a harmless no-op (it
+    simply fails) both when launched by double-click, where there is no
+    console to join, and in an ordinary console build, which already owns
+    one. See UC-09.
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    attach_parent_process = -1
+    if not ctypes.windll.kernel32.AttachConsole(attach_parent_process):
+        return
+    sys.stdout = open("CONOUT$", "w")
+    sys.stderr = open("CONOUT$", "w")
+    sys.stdin = open("CONIN$", "r")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point. Returns the process exit code."""
+    _attach_windows_console()
     parser = build_parser()
     args = parser.parse_args(argv)
 

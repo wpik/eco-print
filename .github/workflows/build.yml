@@ -1,0 +1,52 @@
+name: Build executables
+
+# Cross-platform packaging (UC-09). PyInstaller does not cross-compile, so
+# each OS builds and smoke-tests its own executable in parallel; there is no
+# single "build everything" job to run instead of this matrix.
+#
+# Unsigned builds: no code-signing or notarization step. Users will see a
+# one-time "unknown developer" warning on macOS and Windows.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact-name: eco-print-macos
+          - os: windows-latest
+            artifact-name: eco-print-windows
+          - os: ubuntu-latest
+            artifact-name: eco-print-linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install eco-print and PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui,packaging]"
+
+      - name: Build
+        working-directory: packaging
+        run: pyinstaller --noconfirm eco-print.spec
+
+      - name: Smoke test the built executable
+        working-directory: packaging
+        run: python smoke_test.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: packaging/dist/*
+          if-no-files-found: error
