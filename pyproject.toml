@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Extract the content area of PDF pages and re-pack it onto fewer sheets of paper"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 dependencies = [
     "pypdf>=5.0",
     "pypdfium2>=4.30",
