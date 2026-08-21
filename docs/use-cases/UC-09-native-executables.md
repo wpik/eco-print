@@ -38,19 +38,41 @@ ran correctly. macOS and Linux have no equivalent problem: a windowed binary
 there behaves identically whether launched from a terminal or a file manager.
 
 The fix is a few lines in `cli.py`, run as the very first thing `main()`
-does, gated to `sys.platform == "win32"`: call the Windows API's
-`AttachConsole(-1)`, which joins the console of whatever process launched
-this one, if any. When the exe was double-clicked, there is no such console
-and the call harmlessly fails, leaving the app to run as pure GUI. When the
-exe was run from `cmd.exe` or PowerShell, it attaches to that console and
-`stdout`/`stderr` are reopened against it, so CLI output appears exactly as
-it would from a normal console build. A plain console-subsystem build (or
-any non-Windows platform) never reaches this code path at all.
+does, gated to `sys.platform == "win32"`. It checks **`GetStdHandle`**
+before doing anything else, rather than reaching straight for
+`AttachConsole` — the two tell apart cases that need different handling:
 
-The alternative — always building with a console window on Windows — was
-considered and rejected: it would mean a black console window flashing (or
-staying open) every time a user double-clicks the GUI, which the other two
-platforms never do.
+* **A real stdout handle already exists.** This covers running from an
+  existing console with handles inherited (the ordinary cmd.exe/PowerShell
+  case), and, separately, being driven *programmatically* by another process
+  through a redirected pipe — exactly what `packaging/smoke_test.py` does to
+  the built exe. Python's own `sys.stdout` is still `None` here regardless
+  (PyInstaller's windowed bootloader leaves it that way no matter what the
+  OS-level handle is), so it is rebound directly to the handle that already
+  exists.
+* **No handle exists at all**: a genuine double-click launch, or a process
+  tree that did not inherit handles. Only here does `AttachConsole(-1)` run,
+  joining the console *session* of whatever launched this process, if any —
+  a harmless no-op failure when there is none.
+
+Getting this backwards — calling `AttachConsole` unconditionally, which is
+what shipped first — silently breaks the second case: `AttachConsole` joins
+the process's console *session*, which is a different thing from a
+redirected *handle*, so it steals output away to whatever session the
+process happens to have inherited even when a caller was reading a
+redirected pipe. This was found by CI itself: the smoke test's own captured
+`--version` and merge-summary text came back **empty** on the Windows build,
+even though the underlying merge worked and produced the correct 2-page
+file — the exe's `print()` calls were succeeding, just not into the pipe the
+smoke test was reading. `packaging/smoke_test.py` is exactly the
+programmatic-caller case the fix now handles, so it doubles as this
+behaviour's regression test: if it silently starts capturing empty output on
+Windows again, CI catches it printing nothing rather than declaring success.
+
+The alternative to any of this — always building with a console window on
+Windows — was considered and rejected: it would mean a black console window
+flashing (or staying open) every time a user double-clicks the GUI, which
+the other two platforms never do.
 
 ## Build tooling
 
@@ -178,6 +200,10 @@ credentials — and is deliberately out of scope for now.
 - Running the Windows build from `cmd.exe` with file arguments prints the
   same summary line the other two platforms do; double-clicking it opens the
   GUI with no console window.
+- Running the Windows build as a subprocess with its output captured (as
+  `packaging/smoke_test.py` does) also produces real text, not an empty
+  string -- the distinct case `GetStdHandle` exists to tell apart from a
+  console launch.
 - Every module removed from the build is verified with `otool -L` (or the
   platform equivalent) to confirm nothing load-bearing actually depends on
   it, not assumed safe because it looked unused -- `QtDBus` is the concrete

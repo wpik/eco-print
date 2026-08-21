@@ -23,9 +23,17 @@ from eco_print.cli import (
 class TestWindowsConsoleAttach:
     """UC-09: a packaged --windowed Windows build must still work as a CLI.
 
-    The real AttachConsole/CONOUT$ path can only be exercised on Windows;
-    here it is enough to prove the function is inert everywhere else, so a
-    packaged macOS or Linux build is never affected by this at all.
+    Real GetStdHandle/AttachConsole/CONOUT$ calls only exist on Windows, so
+    the WinAPI layer is mocked here to pin the branching logic itself --
+    most importantly, that a caller which already redirected stdout (a pipe,
+    an inherited console) never has AttachConsole called against it at all.
+    Getting this backwards is exactly the bug that shipped: a packaged
+    Windows build driven by another script via subprocess.run(
+    capture_output=True) -- this project's own smoke_test.py, running for
+    real in CI -- silently produced empty captured output, because
+    AttachConsole joined the process's console *session* and stole the
+    output away from the *handle* the caller was actually reading. The
+    underlying merge still succeeded; only the printed text vanished.
     """
 
     def test_does_nothing_off_windows(self, monkeypatch, capsys):
@@ -35,6 +43,87 @@ class TestWindowsConsoleAttach:
         stdout_before = sys.stdout
         _attach_windows_console()
         assert sys.stdout is stdout_before
+
+    def _mock_windows(self, monkeypatch, *, get_std_handle, attach_console):
+        import sys
+        import types
+
+        monkeypatch.setattr(sys, "platform", "win32")
+
+        calls = {"attach_console": 0}
+
+        def fake_attach_console(handle):
+            calls["attach_console"] += 1
+            return attach_console
+
+        fake_kernel32 = types.SimpleNamespace(
+            GetStdHandle=get_std_handle, AttachConsole=fake_attach_console,
+        )
+        fake_windll = types.SimpleNamespace(kernel32=fake_kernel32)
+        monkeypatch.setattr("ctypes.windll", fake_windll, raising=False)
+
+        fake_msvcrt = types.SimpleNamespace(open_osfhandle=lambda handle, mode: handle)
+        monkeypatch.setitem(sys.modules, "msvcrt", fake_msvcrt)
+
+        opened = []
+
+        def fake_open(target, mode="r", **kwargs):
+            opened.append((target, mode))
+            return object()
+
+        monkeypatch.setattr("builtins.open", fake_open)
+        return calls, opened
+
+    def test_an_existing_handle_is_used_without_attaching(self, monkeypatch):
+        """The core invariant: never call AttachConsole when a real stdout
+        handle already exists -- that is what silently stole output away
+        from a capturing caller."""
+        calls, opened = self._mock_windows(
+            monkeypatch,
+            get_std_handle=lambda h: 42 if h == -11 else 43,
+            attach_console=1,
+        )
+
+        _attach_windows_console()
+
+        assert calls["attach_console"] == 0
+        assert (42, "w") in opened
+
+    def test_a_missing_stderr_handle_does_not_break_stdout(self, monkeypatch):
+        calls, opened = self._mock_windows(
+            monkeypatch, get_std_handle=lambda h: 42 if h == -11 else 0, attach_console=1,
+        )
+
+        _attach_windows_console()
+
+        assert calls["attach_console"] == 0
+        assert (42, "w") in opened
+        assert not any(entry[0] == 0 for entry in opened)  # no bogus handle opened
+
+    def test_no_handle_and_no_console_to_join_is_a_quiet_no_op(self, monkeypatch):
+        """The genuine double-click-launch case: nothing to attach to, and
+        the function must not raise."""
+        calls, opened = self._mock_windows(
+            monkeypatch, get_std_handle=lambda h: 0, attach_console=0,
+        )
+
+        _attach_windows_console()
+
+        assert calls["attach_console"] == 1
+        assert opened == []
+
+    def test_no_handle_but_a_launching_console_exists(self, monkeypatch):
+        """Run from cmd.exe/PowerShell with handles not inherited: the
+        AttachConsole fallback is what makes CLI output visible at all."""
+        calls, opened = self._mock_windows(
+            monkeypatch, get_std_handle=lambda h: 0, attach_console=1,
+        )
+
+        _attach_windows_console()
+
+        assert calls["attach_console"] == 1
+        assert ("CONOUT$", "w") in opened
+        assert ("CONIN$", "r") in opened
 
 
 class TestInvocation:

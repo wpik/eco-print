@@ -11,6 +11,15 @@ itself -- against the same statement-*.pdf fixtures used throughout the test
 suite, and checks the documented 5-into-2-pages result. A packaging mistake
 (a missing Qt plugin, a hidden import PyInstaller's static analysis missed,
 a broken relative import) fails a real subprocess run, not a mock.
+
+Also doubles as the regression test for a real bug this project shipped:
+running the exe via subprocess.run(capture_output=True) -- exactly what this
+script does -- once returned an empty captured stdout on Windows despite the
+merge succeeding underneath, because the exe's own console-attach code
+(cli.py's _attach_windows_console) was stealing output away to a different
+console session than the pipe this script was reading. The captured text is
+therefore asserted on explicitly below, not just printed for a human to
+notice -- that gap is exactly how the bug shipped once already.
 """
 from __future__ import annotations
 
@@ -53,6 +62,13 @@ def main() -> int:
     if version.returncode != 0:
         print(f"FAIL: --version exited {version.returncode}\n{version.stderr}")
         return 1
+    if not version.stdout.strip():
+        print(
+            "FAIL: --version produced no captured output (exit code was 0, so "
+            "the process itself ran -- this is the Windows console-capture "
+            "regression: see cli.py's _attach_windows_console)"
+        )
+        return 1
     print(f"  --version -> {version.stdout.strip()}")
 
     statements = sorted(FIXTURES.glob("statement-*.pdf"))
@@ -64,6 +80,13 @@ def main() -> int:
         merge = run(binary, *[str(p) for p in statements], str(output))
         if merge.returncode != 0:
             print(f"FAIL: merge exited {merge.returncode}\n{merge.stderr}")
+            return 1
+        if "pages" not in merge.stdout:
+            print(
+                f"FAIL: merge produced no usable captured output "
+                f"(got {merge.stdout!r}) -- see the note above about the "
+                f"Windows console-capture regression"
+            )
             return 1
         print(f"  merge -> {merge.stdout.strip()}")
 
