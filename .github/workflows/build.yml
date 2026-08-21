@@ -83,7 +83,6 @@ jobs:
         run: tar -czf ${{ matrix.archive }} -C eco-print .
 
       - uses: actions/upload-artifact@v4
-        if: runner.os != 'macOS'
         with:
           name: ${{ matrix.artifact-name }}
           path: packaging/dist/${{ matrix.archive }}
