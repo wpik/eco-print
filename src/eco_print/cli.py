@@ -124,23 +124,58 @@ def start_gui(paths: list[str]) -> int:
 
 
 def _attach_windows_console() -> None:
-    """Join the launching terminal's console on a windowed Windows build.
+    """Give a windowed Windows build somewhere to send printed output.
 
     A packaged --windowed build has no console of its own, so printed output
     silently vanishes even when the user ran the exe from cmd.exe or
     PowerShell -- CLI mode would otherwise look broken despite working
-    correctly underneath. AttachConsole(-1) attaches to the parent process's
-    console when one launched this process, and is a harmless no-op (it
-    simply fails) both when launched by double-click, where there is no
-    console to join, and in an ordinary console build, which already owns
-    one. See UC-09.
+    correctly underneath. See UC-09.
+
+    Two cases, told apart with GetStdHandle rather than assumed:
+
+    * **A real stdout handle already exists.** This covers being run from an
+      existing console with handles inherited (the common cmd.exe/PowerShell
+      case) and, importantly, being driven programmatically by another
+      process via a redirected pipe (`subprocess.run(capture_output=True)`,
+      exactly what this project's own packaging/smoke_test.py does). Python's
+      own `sys.stdout` is still `None` here -- PyInstaller's windowed
+      bootloader leaves it that way regardless of the OS-level handle -- so
+      it is rebound directly to that handle.
+    * **No handle exists at all**: a genuine double-click launch, or a
+      process tree that did not inherit handles. `AttachConsole(-1)` tries to
+      join the launching process's console *session*, which is a separate
+      thing from a redirected handle -- it is a no-op failure when there is
+      no console to join, which is what makes it safe to call unconditionally
+      here without risking the first, already-working case.
+
+    Getting this backwards -- calling AttachConsole first regardless of an
+    existing handle -- silently steals output away to whatever console
+    session the process happens to have inherited, even when a caller was
+    reading a redirected pipe: found by an automated build capturing empty
+    output from a working run, not by reasoning about it in advance.
     """
     if sys.platform != "win32":
         return
     import ctypes
 
+    kernel32 = ctypes.windll.kernel32
+    std_output_handle = -11
+    std_error_handle = -12
+
+    stdout_handle = kernel32.GetStdHandle(std_output_handle)
+    if stdout_handle:
+        import msvcrt
+
+        sys.stdout = open(msvcrt.open_osfhandle(stdout_handle, 0), "w", closefd=False)
+        stderr_handle = kernel32.GetStdHandle(std_error_handle)
+        if stderr_handle:
+            sys.stderr = open(
+                msvcrt.open_osfhandle(stderr_handle, 0), "w", closefd=False
+            )
+        return
+
     attach_parent_process = -1
-    if not ctypes.windll.kernel32.AttachConsole(attach_parent_process):
+    if not kernel32.AttachConsole(attach_parent_process):
         return
     sys.stdout = open("CONOUT$", "w")
     sys.stderr = open("CONOUT$", "w")

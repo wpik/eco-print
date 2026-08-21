@@ -74,6 +74,63 @@ a = Analysis(
     noarchive=False,
 )
 
+# `excludes` above only stops modules PyInstaller reaches by walking Python
+# imports. Several Qt binaries get pulled in a second way entirely: Qt's own
+# plugin directories (styles/, platforminputcontexts/, tls/, ...) are
+# bundled wholesale per category, and one plugin needing an extra Qt module
+# is enough to drag that whole module -- and everything IT needs -- in too,
+# regardless of `excludes`.
+#
+# Verified with `otool -L` before removing any of these, rather than
+# assumed: none of QtCore, QtGui, QtWidgets, or the macOS Cocoa platform
+# plugin itself (the one thing genuinely load-bearing) link any of them.
+# What actually pulls each one in:
+#   - platforminputcontexts/libqtvirtualkeyboardplugin.dylib (an on-screen
+#     keyboard for touch input, irrelevant to a desktop app) drags in
+#     QtVirtualKeyboard, QtQml, QtQuick and, through them, QtNetwork and
+#     QtOpenGL -- the single biggest chunk of unnecessary weight.
+#   - tls/lib*backend.dylib, generic/libqtuiotouchplugin.dylib and
+#     networkinformation/libqapplenetworkinformation.dylib each need
+#     QtNetwork; the app makes no network requests at all.
+#   - iconengines/libqsvgicon.dylib and imageformats/libqsvg.dylib need
+#     QtSvg; nothing in src/ uses a QIcon or loads an SVG.
+#   - imageformats/libqpdf.dylib needs QtPdf, Qt's own PDF renderer --
+#     unused, pypdfium2 renders every page in this project.
+#
+# QtDBus is deliberately NOT in this list, despite looking like the same
+# kind of unused weight: unlike everything above, it is a hard, load-time
+# dependency of QtGui.framework itself on macOS (confirmed with
+# `otool -L QtGui.framework/.../QtGui`, which lists QtDBus.framework
+# directly) rather than something only an optional plugin reaches for.
+# Removing it does not just drop a feature -- it makes `import PySide6.QtGui`
+# fail outright, which is exactly what happened the first time this list
+# included it: the GUI stopped launching, caught by actually running the
+# packaged binary rather than trusting the exclusion list on paper.
+EXCLUDED_BINARY_PATTERNS = (
+    "platforminputcontexts",
+    "libqtvirtualkeyboardplugin",
+    "QtVirtualKeyboard",
+    "QtQml",
+    "QtQuick",
+    "tls",
+    "networkinformation",
+    "libqtuiotouchplugin",
+    "QtNetwork",
+    "QtOpenGL",
+    "libqsvg",
+    "QtSvg",
+    "libqpdf",
+    "QtPdf",
+)
+
+
+def _is_excluded_binary(dest_path: str) -> bool:
+    return any(pattern in dest_path for pattern in EXCLUDED_BINARY_PATTERNS)
+
+
+a.binaries = [entry for entry in a.binaries if not _is_excluded_binary(entry[0])]
+a.datas = [entry for entry in a.datas if not _is_excluded_binary(entry[0])]
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
