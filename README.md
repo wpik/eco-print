@@ -99,5 +99,4 @@ generator chose. No real document, and no personal data, is in this repository.
 A test asserts that regenerating the corpus reproduces the committed bytes, so it
 cannot drift from what the documentation says it contains.
 
-`docs/` holds the [use cases](docs/use-cases/) the tool is built against and the
-[implementation plan](docs/implementation-plan.md).
+`docs/` holds the [use cases](docs/use-cases/) the tool is built against.

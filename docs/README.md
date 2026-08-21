@@ -34,10 +34,6 @@ These are settled; they are the assumptions the use cases are written against.
    ([UC-08](use-cases/UC-08-settings-parity.md)).
 7. **Python with a virtual environment.** No global installs.
 
-## Implementation
-
-See [implementation-plan.md](implementation-plan.md).
-
 ## Use cases
 
 | ID | Title |
