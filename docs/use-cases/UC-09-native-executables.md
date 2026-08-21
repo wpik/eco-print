@@ -163,10 +163,30 @@ build itself:
 - `dist/` holds both the finished `eco-print.app` and the loose
   `dist/eco-print/` onedir folder BUNDLE was built from — intermediate
   output, not something to ship. The workflow previously uploaded
-  `packaging/dist/*`, which grabbed both; it now uploads only the `.app` zip
-  on macOS, and only `dist/eco-print/` explicitly on the other two platforms
-  (which never had a second copy, but this makes the intent explicit rather
-  than relying on there happening to be nothing else in `dist/`).
+  `packaging/dist/*`, which grabbed both; it now archives each platform to
+  exactly **one file** (`ditto` on macOS as above, `Compress-Archive` on
+  Windows, `tar -czf` on Linux — chosen there over zip because it reliably
+  preserves the executable bit, verified by extracting a `tar`-built archive
+  and confirming `eco-print` came out `-rwxr-xr-x` without a manual `chmod`)
+  and uploads only that.
+
+### Release assets
+
+On a tag push (`if: startsWith(github.ref, 'refs/tags/')`), a `release` job
+runs after the three builds complete, downloads their three single-file
+archives, and attaches them to the GitHub Release for that tag with
+`gh release upload` — or `gh release create --generate-notes` first, if
+pushing the tag did not already create one. Either way this is idempotent:
+re-running the workflow against the same tag (`--clobber` on the upload)
+replaces the assets rather than failing on "already exists," which matters
+for fixing a bad build without needing a new tag.
+
+This only runs for a real tag push. `workflow_dispatch` runs (used throughout
+this project's own development to test changes before cutting a release) are
+never against a tag, so `startsWith(github.ref, 'refs/tags/')` is false and
+the release job — along with any assumption that a release exists to attach
+to — is skipped entirely; only the plain workflow artifacts are produced, as
+before.
 
 Builds are **unsigned**. Users see a one-time "unknown developer" warning on
 first launch on macOS and Windows, which they click through. Code signing
@@ -211,3 +231,10 @@ credentials — and is deliberately out of scope for now.
 - The downloaded macOS CI artifact is close to the size of the `.app` it
   contains -- not roughly double it from a duplicated onedir folder, and not
   further inflated by symlinks-turned-real-copies.
+- Pushing a version tag results in all three platform archives attached to
+  that tag's GitHub Release as downloadable assets, without a person having
+  to visit the Actions tab and download a workflow artifact by hand.
+- Re-running the workflow against the same tag (a fixed build after a bad
+  one) replaces the existing release assets rather than failing.
+- A `workflow_dispatch` run against a branch never touches the release
+  step -- only a real tag push does.

@@ -6,6 +6,12 @@ name: Build executables
 #
 # Unsigned builds: no code-signing or notarization step. Users will see a
 # one-time "unknown developer" warning on macOS and Windows.
+#
+# Each platform is archived to exactly one file -- a zip on macOS/Windows, a
+# tar.gz on Linux (which, unlike zip, reliably preserves the executable bit,
+# so `./eco-print` works right after extracting without a manual chmod) --
+# so that both the workflow artifact and, on a tag push, the release asset
+# are a single clean download per platform rather than a loose pile of files.
 
 on:
   push:
@@ -20,10 +26,13 @@ jobs:
         include:
           - os: macos-latest
             artifact-name: eco-print-macos
+            archive: eco-print-macos.zip
           - os: windows-latest
             artifact-name: eco-print-windows
+            archive: eco-print-windows.zip
           - os: ubuntu-latest
             artifact-name: eco-print-linux
+            archive: eco-print-linux.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -45,33 +54,66 @@ jobs:
         working-directory: packaging
         run: python smoke_test.py
 
-      # macOS only: `dist/` holds both the finished eco-print.app and the
-      # loose dist/eco-print/ onedir folder BUNDLE was built from -- the
-      # latter is intermediate build output, not something to ship, and
-      # uploading it too would silently double the artifact for no reason.
-      # The .app is archived with `ditto` rather than left as a raw
-      # directory for actions/upload-artifact to zip itself: PyInstaller's
-      # macOS bundle uses symlinks between Contents/Frameworks and
-      # Contents/Resources to avoid storing the same libraries twice on
-      # disk, and upload-artifact's zip step does not preserve them --
-      # it was found to materialize each symlink as a full real copy,
-      # roughly doubling the bundle's size on its own. `ditto` is Apple's
-      # own tool for archiving .app bundles and preserves them correctly.
-      - name: Archive the .app bundle (macOS)
+      # `dist/` holds both the finished eco-print.app/eco-print.exe/eco-print
+      # and, on macOS, the loose dist/eco-print/ onedir folder BUNDLE was
+      # built from -- intermediate output, not something to ship. Each
+      # platform is archived to exactly the one thing that should ship.
+      #
+      # macOS uses `ditto`, not a generic zip tool: PyInstaller's .app bundle
+      # uses symlinks between Contents/Frameworks and Contents/Resources to
+      # avoid storing the same libraries twice on disk, and a generic zip
+      # step (including actions/upload-artifact's own) does not preserve
+      # them -- found to materialize each one as a full real copy, roughly
+      # doubling the bundle's size on its own. `ditto` is Apple's own tool
+      # for archiving .app bundles and preserves them correctly.
+      - name: Archive the build (macOS)
         if: runner.os == 'macOS'
         working-directory: packaging/dist
-        run: ditto -c -k --sequesterRsrc --keepParent eco-print.app eco-print-macos.zip
+        run: ditto -c -k --sequesterRsrc --keepParent eco-print.app ${{ matrix.archive }}
 
-      - uses: actions/upload-artifact@v4
-        if: runner.os == 'macOS'
-        with:
-          name: ${{ matrix.artifact-name }}
-          path: packaging/dist/eco-print-macos.zip
-          if-no-files-found: error
+      - name: Archive the build (Windows)
+        if: runner.os == 'Windows'
+        working-directory: packaging/dist
+        shell: pwsh
+        run: Compress-Archive -Path eco-print -DestinationPath ${{ matrix.archive }}
+
+      - name: Archive the build (Linux)
+        if: runner.os == 'Linux'
+        working-directory: packaging/dist
+        run: tar -czf ${{ matrix.archive }} -C eco-print .
 
       - uses: actions/upload-artifact@v4
         if: runner.os != 'macOS'
         with:
           name: ${{ matrix.artifact-name }}
-          path: packaging/dist/eco-print/*
+          path: packaging/dist/${{ matrix.archive }}
           if-no-files-found: error
+
+  release:
+    name: Attach artifacts to the release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # actions/download-artifact lays each named artifact out in its own
+      # subdirectory; since the build job above archives every platform to
+      # exactly one file, this finds exactly the three real downloads.
+      - name: Create or update the release and attach the archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          mapfile -t files < <(find artifacts -type f)
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "${files[@]}" --repo "$GITHUB_REPOSITORY" \
+              --title "$tag" --generate-notes
+          fi
