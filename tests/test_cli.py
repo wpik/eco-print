@@ -10,7 +10,31 @@ from pathlib import Path
 import pytest
 
 from eco_print import __version__
-from eco_print.cli import EXIT_FAILED, EXIT_OK, EXIT_PARTIAL, build_parser, main
+from eco_print.cli import (
+    EXIT_FAILED,
+    EXIT_OK,
+    EXIT_PARTIAL,
+    _attach_windows_console,
+    build_parser,
+    main,
+)
+
+
+class TestWindowsConsoleAttach:
+    """UC-09: a packaged --windowed Windows build must still work as a CLI.
+
+    The real AttachConsole/CONOUT$ path can only be exercised on Windows;
+    here it is enough to prove the function is inert everywhere else, so a
+    packaged macOS or Linux build is never affected by this at all.
+    """
+
+    def test_does_nothing_off_windows(self, monkeypatch, capsys):
+        import sys
+
+        monkeypatch.setattr(sys, "platform", "darwin")
+        stdout_before = sys.stdout
+        _attach_windows_console()
+        assert sys.stdout is stdout_before
 
 
 class TestInvocation:

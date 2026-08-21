@@ -46,6 +46,7 @@ These are settled; they are the assumptions the use cases are written against.
 | [UC-06](use-cases/UC-06-page-packing.md) | Packing blocks onto the fewest sheets |
 | [UC-07](use-cases/UC-07-difficult-inputs.md) | Difficult inputs and failure handling |
 | [UC-08](use-cases/UC-08-settings-parity.md) | Every option available in both front ends |
+| [UC-09](use-cases/UC-09-native-executables.md) | Package as a native executable |
 
 ## Reference corpus
 
